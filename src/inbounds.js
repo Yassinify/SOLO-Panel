@@ -1,40 +1,30 @@
-// Data-access layer for inbounds (each inbound bundles its own single
-// VLESS+REALITY client), plus a helper to reload xray-core whenever
-// the underlying data changes. Routes should go through this module
-// rather than touching `db` directly, so the "rebuild config + restart
-// xray" step never gets forgotten.
+// Data-access layer for inbounds, plus a helper to reload xray-core
+// whenever the underlying data changes. Routes should go through this
+// module rather than touching `db` directly, so the "rebuild config +
+// restart xray" step never gets forgotten.
 //
-// There is no admin-facing inbound CRUD anymore. Instead
+// There is no admin-facing inbound CRUD. Instead
 // `ensureGeneratedInbounds()` auto-seeds one inbound per supported
-// (transport x ALPN) combination — see docs/how-program-work.md for
-// why these are the only combinations Railway + REALITY support.
+// (protocol x transport) combination, all running behind Railway's
+// own edge TLS on its single public port — see docs/how-program-work.md.
 'use strict';
 
 const crypto = require('crypto');
 const { db, getConfigValue, setConfigValue } = require('./db');
 const manager = require('./xray/manager');
 const { buildXrayConfig } = require('./xray/config');
-const {
-  generateRealityKeyPair,
-  generateRealityShortId,
-  generateGrpcServiceName,
-  generateXhttpPath,
-} = require('./utils');
+const { generatePath, generateSsPassword } = require('./utils');
 
-// Site to borrow the TLS identity of for REALITY's handshake. A
-// well-known, reliably-available TLS 1.3 + h2 site works for any
-// inbound; kept fixed so inbound creation never needs manual input.
-const REALITY_DEST_HOST = 'www.microsoft.com';
-const REALITY_DEST = `${REALITY_DEST_HOST}:443`;
+// Every protocol x transport combination that works over Railway's
+// single HTTPS edge port (raw TCP / gRPC / REALITY excluded — they
+// need their own port, see docs/how-program-work.md). Order here is
+// also seeding order, so it determines inbound ids (and therefore
+// internal ports, see xray/config.js).
+const PROTOCOLS = ['vless', 'vmess', 'trojan', 'shadowsocks'];
+const TRANSPORTS = ['ws', 'xhttp', 'httpupgrade'];
 
-// The only transports valid under `security: reality` in Xray-core
-// (WS/H2/QUIC are not) x the ALPN variants worth offering as separate
-// fallback entry points. Every combination gets its own inbound, own
-// internal port, and its own Railway TCP Proxy for the admin to set
-// up. Order here is also seeding order, so it determines inbound ids
-// (and therefore internal ports, see xray/config.js).
-const TRANSPORTS = ['tcp', 'grpc', 'xhttp'];
-const ALPN_VARIANTS = ['h2', 'http/1.1', 'h2,http/1.1'];
+// Fixed AEAD method for every generated Shadowsocks inbound.
+const SS_METHOD = 'chacha20-ietf-poly1305';
 
 function listInbounds() {
   return db.prepare('SELECT * FROM inbounds ORDER BY id').all();
@@ -45,74 +35,50 @@ function getInbound(id) {
 }
 
 /**
- * Idempotently seed one inbound row per (transport x ALPN) combo, all
- * sharing a single REALITY keypair and client UUID (generated once,
- * on first ever call) so every generated config is just a different
- * front door to the same account — not a separate identity. Safe to
- * call on every boot: does nothing once the 9 rows already exist.
+ * Idempotently seed one inbound row per (protocol x transport) combo.
+ * Credentials are generated once per protocol (not per row) and
+ * reused across that protocol's 3 transport rows, so every generated
+ * config for a given protocol is just a different front door to the
+ * same account — not a separate identity. Safe to call on every
+ * boot: does nothing once all rows already exist.
  */
 function ensureGeneratedInbounds() {
   const existingCount = db.prepare('SELECT COUNT(*) AS n FROM inbounds').get().n;
-  const expectedCount = TRANSPORTS.length * ALPN_VARIANTS.length;
+  const expectedCount = PROTOCOLS.length * TRANSPORTS.length;
   if (existingCount >= expectedCount) return;
 
-  const { privateKey, publicKey } = generateRealityKeyPair();
-  const sharedShortId = generateRealityShortId();
-  const sharedClientUuid = crypto.randomUUID();
+  const credentialsByProtocol = {
+    vless: { client_uuid: crypto.randomUUID() },
+    vmess: { client_uuid: crypto.randomUUID() },
+    trojan: { trojan_password: crypto.randomBytes(12).toString('hex') },
+    shadowsocks: { ss_method: SS_METHOD, ss_password: generateSsPassword() },
+  };
 
   const insert = db.prepare(
     `INSERT INTO inbounds (
-      transport, fingerprint, alpn, grpc_service_name, xhttp_path,
-      reality_dest, reality_server_name, reality_private_key,
-      reality_public_key, reality_short_id, client_uuid, subscription_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      protocol, transport, path, client_uuid, trojan_password,
+      ss_method, ss_password, subscription_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   const insertAll = db.transaction(() => {
-    for (const transport of TRANSPORTS) {
-      for (const alpn of ALPN_VARIANTS) {
+    for (const protocol of PROTOCOLS) {
+      const creds = credentialsByProtocol[protocol];
+      for (const transport of TRANSPORTS) {
         insert.run(
+          protocol,
           transport,
-          'chrome',
-          alpn,
-          transport === 'grpc' ? generateGrpcServiceName() : null,
-          transport === 'xhttp' ? generateXhttpPath() : null,
-          REALITY_DEST,
-          REALITY_DEST_HOST,
-          privateKey,
-          publicKey,
-          sharedShortId,
-          sharedClientUuid,
+          generatePath(),
+          creds.client_uuid || null,
+          creds.trojan_password || null,
+          creds.ss_method || null,
+          creds.ss_password || null,
           crypto.randomBytes(16).toString('hex')
         );
       }
     }
   });
   insertAll();
-}
-
-/**
- * Save the Railway-assigned external port for one inbound's Railway
- * TCP Proxy. Set by the admin after manually configuring the proxy in
- * the Railway dashboard (see docs/how-program-work.md) — the host
- * side of the address is shared across all inbounds, see
- * `getExternalHost`/`setExternalHost` below. No xray reload needed —
- * this only affects the client-facing share link, not xray's own
- * config.
- */
-function setInboundExternalPort(id, externalPort) {
-  db.prepare('UPDATE inbounds SET external_port = ? WHERE id = ?').run(externalPort, id);
-}
-
-// Every Railway TCP Proxy on the same service shares one host (only
-// the port differs per proxy), so the admin only ever enters this
-// once, not per inbound.
-function getExternalHost() {
-  return getConfigValue('external_host');
-}
-
-function setExternalHost(host) {
-  setConfigValue('external_host', host);
 }
 
 /**
@@ -144,11 +110,8 @@ function addClientTraffic(inboundId, uplinkDelta, downlinkDelta) {
 
 /**
  * Rebuild the Xray config from current DB state and (re)start
- * xray-core with it. Call this after any DB change affecting
- * inbounds (currently just external-address updates, which don't
- * actually need a reload, but this stays the single choke point in
- * case that changes). All generated inbounds are always active — no
- * per-inbound enabled flag anymore.
+ * xray-core with it. Called once on boot after seeding. All generated
+ * inbounds are always active — no per-inbound enabled flag.
  */
 async function reloadXray() {
   const config = buildXrayConfig(listInbounds());
@@ -164,9 +127,6 @@ module.exports = {
   listInbounds,
   getInbound,
   ensureGeneratedInbounds,
-  setInboundExternalPort,
-  getExternalHost,
-  setExternalHost,
   getOrCreateGlobalSubscriptionId,
   addClientTraffic,
   reloadXray,

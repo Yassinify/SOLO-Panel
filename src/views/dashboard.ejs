@@ -7,22 +7,13 @@
 
   <div class="card">
     <p class="muted" style="margin-top:0;">
-      One VLESS+REALITY config is auto-generated for every supported
-      transport/ALPN combination, all sharing the same client identity.
-      Enter your Railway TCP Proxy host once here (it's the same for
-      every proxy on this service), then add a TCP Proxy per inbound
-      below and fill in just its port.
+      Every combination of protocol, transport, ALPN, and TLS
+      fingerprint is auto-generated automatically -- nothing to set up.
+      All of them ride Railway's single HTTPS domain (<%= externalHost %>:443).
+      Paste the one link below into your client's subscription field to
+      get every config at once.
     </p>
-    <form method="POST" action="/settings/host" class="form-row">
-      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-      <div style="flex:1;">
-        <label style="margin-top:0;">Railway TCP Proxy host</label>
-        <input type="text" name="externalHost" placeholder="e.g. roundhouse.proxy.rlwy.net" value="<%= externalHost || '' %>" required />
-      </div>
-      <button type="submit" class="btn" style="height:41px;">Save</button>
-    </form>
-
-    <div style="margin-top:14px;">
+    <div>
       <label style="margin-top:0;">Subscription link (all configs)</label>
       <div class="link-box">
         <code id="sub-all" class="muted" title="Click to copy" onclick="copyLink('sub-all')"><%= subLink %></code>
@@ -37,32 +28,22 @@
           <div>
             <h2 style="margin-bottom:4px;"><%= inbound.label %></h2>
             <p class="muted" style="margin:0;">
-              VLESS · REALITY · fp=<%= inbound.fingerprint %> · internal port <%= inbound.internalPort %>
+              path=<%= inbound.path %> - internal port <%= inbound.internalPort %> - <%= inbound.links.length %> link variants
             </p>
           </div>
         </div>
 
-        <form method="POST" action="/inbounds/<%= inbound.id %>/port" class="form-row">
-          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
-          <div style="width:140px;">
-            <label style="margin-top:0;">Port</label>
-            <input type="text" name="externalPort" placeholder="e.g. 21012" value="<%= inbound.external_port || '' %>" required />
-          </div>
-          <button type="submit" class="btn" style="height:41px;">Save</button>
-        </form>
-
-        <div style="margin-top:14px;">
-          <label style="margin-top:0;">Client link</label>
-          <% if (inbound.link) { %>
-            <div class="link-box">
-              <code id="link-<%= inbound.id %>" title="Click to copy" onclick="copyLink('link-<%= inbound.id %>')"><%= inbound.link %></code>
-              <button type="button" class="btn btn-small qr-icon-btn" title="Show QR" onclick="showQr('link-<%= inbound.id %>')"><%- qrIconSvg %></button>
+        <details>
+          <summary class="muted" style="cursor:pointer;">Show all link variants</summary>
+          <% inbound.links.forEach((link, idx) => { %>
+            <div class="link-box" style="margin-top:10px;">
+              <code id="link-<%= inbound.id %>-<%= idx %>" title="Click to copy" onclick="copyLink('link-<%= inbound.id %>-<%= idx %>')"><%= link %></code>
+              <button type="button" class="btn btn-small qr-icon-btn" title="Show QR" onclick="showQr('link-<%= inbound.id %>-<%= idx %>')"><%- qrIconSvg %></button>
             </div>
-          <% } else { %>
-            <p class="muted" style="margin-top:6px;">Set the host above and this inbound's port to activate its link.</p>
-          <% } %>
-          <p class="muted mono" style="margin-top:10px; margin-bottom:0;">&uarr;<%= formatBytes(inbound.up_bytes) %> &darr;<%= formatBytes(inbound.down_bytes) %></p>
-        </div>
+          <% }) %>
+        </details>
+
+        <p class="muted mono" style="margin-top:10px; margin-bottom:0;">&uarr;<%= formatBytes(inbound.up_bytes) %> &darr;<%= formatBytes(inbound.down_bytes) %></p>
       </div>
   <% }) %>
 </div>

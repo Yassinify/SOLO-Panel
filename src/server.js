@@ -5,20 +5,34 @@
 'use strict';
 
 const path = require('path');
+const http = require('http');
 const express = require('express');
 const session = require('express-session');
 const { getOrCreateSessionSecret } = require('./db'); // also initializes SQLite DB and tables on startup
 const { seedAdminFromEnv, verifyLogin, requireAuth, getOrCreateCsrfToken, requireCsrf } = require('./auth');
 const inbounds = require('./inbounds');
 const manager = require('./xray/manager');
-const { buildClientLink, labelForInbound } = require('./xray/links');
+const { buildAllClientLinks, buildLinksForInbound, labelForInbound } = require('./xray/links');
 const { internalPortForInbound } = require('./xray/config');
+const { attachProxy } = require('./xray/proxy');
 const statsPoller = require('./xray/statsPoller');
 const { formatBytes, QR_ICON_SVG } = require('./utils');
+
+// The public host clients connect to. Railway sets RAILWAY_PUBLIC_DOMAIN
+// automatically for the service's HTTPS domain; falling back to the
+// request's Host header covers local dev / custom-domain setups. No
+// admin input needed either way (see docs/how-program-work.md).
+function externalHostFor(req) {
+  return process.env.RAILWAY_PUBLIC_DOMAIN || req.get('host');
+}
 
 seedAdminFromEnv();
 
 const app = express();
+// Created explicitly (instead of via app.listen) so attachProxy() can
+// hook the 'upgrade' event before the server starts accepting
+// connections — see src/xray/proxy.js.
+const server = http.createServer(app);
 
 const PORT = process.env.PORT || 3000;
 const HOST = '0.0.0.0';
@@ -29,6 +43,12 @@ app.set('views', `${__dirname}/views`);
 // X-Forwarded-Proto header; trusting the proxy lets express-session
 // correctly mark cookies secure in production.
 app.set('trust proxy', 1);
+
+// Must run before static/session/routes: forwards XHTTP requests
+// (matched by path) straight to the matching xray-core inbound,
+// bypassing the rest of the panel's middleware chain entirely.
+const xhttpMiddleware = attachProxy(server, inbounds.listInbounds, internalPortForInbound);
+app.use(xhttpMiddleware);
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.urlencoded({ extended: false }));
@@ -65,11 +85,7 @@ app.get('/sub/:subId', (req, res) => {
     return res.status(404).send('Not found');
   }
 
-  const externalHost = inbounds.getExternalHost();
-  const links = inbounds
-    .listInbounds()
-    .map((row) => buildClientLink({ inbound: row, externalHost }))
-    .filter(Boolean);
+  const links = buildAllClientLinks(inbounds.listInbounds(), externalHostFor(req));
   res.type('text/plain').send(Buffer.from(links.join('\n')).toString('base64'));
 });
 
@@ -99,12 +115,12 @@ app.post('/logout', requireCsrf, (req, res) => {
 });
 
 app.get('/', requireAuth, (req, res) => {
-  const externalHost = inbounds.getExternalHost();
+  const externalHost = externalHostFor(req);
   const rows = inbounds.listInbounds().map((row) => ({
     ...row,
     label: labelForInbound(row),
     internalPort: internalPortForInbound(row.id),
-    link: buildClientLink({ inbound: row, externalHost }),
+    links: buildLinksForInbound({ inbound: row, externalHost }),
     totalTraffic: formatBytes(row.up_bytes + row.down_bytes),
   }));
   const subLink = `${req.protocol}://${req.get('host')}/sub/${inbounds.getOrCreateGlobalSubscriptionId()}`;
@@ -119,28 +135,7 @@ app.get('/', requireAuth, (req, res) => {
   });
 });
 
-// Saves the shared Railway TCP Proxy host, used by every inbound's
-// share link (only the port differs per inbound, see below).
-app.post('/settings/host', requireAuth, requireCsrf, (req, res) => {
-  const { externalHost } = req.body;
-  if (externalHost) {
-    inbounds.setExternalHost(externalHost);
-  }
-  res.redirect('/');
-});
-
-// Saves the Railway-assigned external port for this inbound's Railway
-// TCP Proxy, once the admin has manually set that up pointing at this
-// inbound's internal port.
-app.post('/inbounds/:id/port', requireAuth, requireCsrf, (req, res) => {
-  const { externalPort } = req.body;
-  if (externalPort) {
-    inbounds.setInboundExternalPort(req.params.id, Number(externalPort));
-  }
-  res.redirect('/');
-});
-
-const server = app.listen(PORT, HOST, () => {
+server.listen(PORT, HOST, () => {
   console.log(`SOLO Panel listening on http://${HOST}:${PORT}`);
 });
 

@@ -42,24 +42,23 @@ db.exec(`
 `);
 
 // Inbounds table: one row per auto-generated Xray-core inbound. The
-// panel no longer lets the admin hand-create/name inbounds — instead
-// it seeds exactly one row per (transport x alpn) combination that
-// Railway + REALITY can actually support (see
-// `inbounds.js#ensureGeneratedInbounds` and docs/how-program-work.md),
-// all sharing one REALITY keypair and one client UUID so every row is
-// just a different front door to the same account. `external_port`
-// holds the Railway-assigned TCP Proxy port for this row's internal
-// port; the host is NOT stored per row anymore — every TCP Proxy on
-// the same Railway service shares one host, so that lives once in
-// `app_config` (see `getExternalHost`/`setExternalHost` below).
-// `transport` is 'tcp' (raw, XTLS Vision), 'grpc', or 'xhttp'. This is
-// a breaking schema change from the earlier admin-managed-inbounds
-// design: if an `inbounds` table already exists in an old shape (has
-// a `remark` or `external_host` column, neither of which the new
-// schema has), drop and recreate it fresh rather than attempt a
-// column-by-column migration — old inbounds are not carried forward,
-// they get regenerated automatically on next boot. Leaves an
-// already-new-shape table alone.
+// panel seeds exactly one row per (protocol x transport) combination
+// (see `inbounds.js#ensureGeneratedInbounds` and
+// docs/how-program-work.md) — protocol is 'vless'/'vmess'/'trojan'/
+// 'shadowsocks', transport is 'ws'/'xhttp'/'httpupgrade'. All of them
+// run behind Railway's own edge TLS on the single public port (no
+// REALITY, no admin-configured TCP Proxy / host / port anymore — see
+// Change Log). ALPN and TLS fingerprint don't change server-side
+// behavior (Railway's edge does the real TLS handshake, not xray), so
+// they are NOT stored per row — they're generated as link-only
+// variants at share-link build time (see xray/links.js). Credentials
+// are shared across every row of the same protocol, so every
+// generated config is a different front door to the same account.
+// Breaking schema change from the REALITY design: if an `inbounds`
+// table already exists in the old shape (has a `reality_dest` or
+// `fingerprint` column, neither of which the new schema has), drop
+// and recreate it fresh — old inbounds regenerate automatically on
+// next boot. Leaves an already-new-shape table alone.
 const existingInboundColumns = db
   .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='inbounds'")
   .get()
@@ -67,29 +66,25 @@ const existingInboundColumns = db
   : [];
 if (
   existingInboundColumns.includes('remark') ||
-  existingInboundColumns.includes('protocol') ||
-  existingInboundColumns.includes('external_host')
+  existingInboundColumns.includes('external_host') ||
+  existingInboundColumns.includes('reality_dest') ||
+  existingInboundColumns.includes('fingerprint')
 ) {
   db.exec('DROP TABLE inbounds');
 }
 db.exec(`
   CREATE TABLE IF NOT EXISTS inbounds (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    protocol TEXT NOT NULL,
     transport TEXT NOT NULL,
-    fingerprint TEXT NOT NULL DEFAULT 'chrome',
-    alpn TEXT NOT NULL,
-    grpc_service_name TEXT,
-    xhttp_path TEXT,
-    reality_dest TEXT NOT NULL,
-    reality_server_name TEXT NOT NULL,
-    reality_private_key TEXT NOT NULL,
-    reality_public_key TEXT NOT NULL,
-    reality_short_id TEXT NOT NULL,
-    client_uuid TEXT NOT NULL,
+    path TEXT NOT NULL,
+    client_uuid TEXT,
+    trojan_password TEXT,
+    ss_method TEXT,
+    ss_password TEXT,
     subscription_id TEXT NOT NULL,
     up_bytes INTEGER NOT NULL DEFAULT 0,
     down_bytes INTEGER NOT NULL DEFAULT 0,
-    external_port INTEGER,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `);

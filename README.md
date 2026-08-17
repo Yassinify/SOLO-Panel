@@ -6,20 +6,21 @@ run on [Railway](https://railway.com) as a single service, no VPS or
 external database required.
 
 Inspired by [3x-ui](https://github.com/MHSanaei/3x-ui)'s UI/UX. Unlike
-a VPS-based panel, SOLO Panel is designed around Railway's networking
-model: every inbound runs as WebSocket over Railway's single public
-HTTPS port by default (TLS terminated at Railway's edge), with an
-optional raw-TCP mode via Railway's manually-configured TCP Proxy
-feature.
+a VPS-based panel, SOLO Panel is designed entirely around Railway's
+networking model: every inbound runs as WebSocket, XHTTP, or
+HTTPUpgrade over Railway's single public HTTPS port (TLS terminated at
+Railway's edge) — no TCP Proxy, no manual host/port setup, ever.
 
 ## Features
 
+- Fully zero-config: on first boot the panel auto-generates one Xray
+  inbound for every (protocol x transport) combination — VLESS,
+  VMess, Trojan, Shadowsocks x WS, XHTTP, HTTPUpgrade — and one
+  combined subscription link exposing every (ALPN x TLS fingerprint)
+  variant of each. Nothing to create, toggle, or configure.
 - Session-based admin login (single admin account)
-- Create/enable/disable/delete inbounds (vless, vmess, trojan, shadowsocks)
-- Per-inbound client management with shareable connection links
-- Per-client subscription URLs (`/sub/:token`, base64, importable into client apps)
-- Live per-client traffic stats (via Xray's Stats API)
-- Optional raw-TCP inbounds via Railway's TCP Proxy
+- One combined subscription URL (`/sub/:token`, base64, importable into client apps)
+- Live per-inbound traffic stats (via Xray's Stats API)
 - SQLite storage (no external database needed)
 - xray-core binary downloaded automatically on install (no Docker needed)
 
@@ -70,21 +71,10 @@ Railway deploys automatically once the repo is connected. On first
 boot, the app seeds the single admin account (`admin` /
 `ADMIN_PASSWORD`) and creates the SQLite schema under `DATA_DIR`.
 
-Visit your Railway-assigned domain, log in, and create your first
-inbound.
-
-### 6. (Optional) Raw-TCP inbounds
-
-WebSocket inbounds work out of the box with no further setup. If you
-also want a raw-TCP inbound, create it in the panel first (transport:
-"Raw TCP"), note the internal port it shows you, then in Railway:
-**Settings → Networking → TCP Proxy → New TCP Proxy**, pointing at
-that internal port. Railway assigns an external host:port — paste that
-back into the panel on the inbound's detail page.
-
-Raw TCP has no TLS termination from Railway (unlike the HTTPS domain),
-so this mode is plaintext at the transport level unless you layer your
-own encryption.
+Visit your Railway-assigned domain and log in — every inbound and the
+combined subscription link are already there, generated automatically.
+No further setup is needed; there's no raw-TCP mode (it would need its
+own Railway-assigned port, incompatible with the single-domain design).
 
 ## Common mistakes
 
@@ -94,37 +84,19 @@ Real footguns in how the panel works, not just config typos:
   account, inbounds, clients, the auto-generated `SESSION_SECRET`) is
   wiped on every redeploy without one. This is the single most common
   way to "lose" a working panel. See step 3 above.
-- **Any inbound/client change restarts xray-core, not just the one
-  edited.** Adding a client, toggling an inbound, deleting a client —
-  all of it calls a full `restart()`, which briefly drops **every**
-  active connection on **every** inbound, not only the one you
-  touched. Expect a few seconds of downtime across all users each time
-  you make a change.
-- **Raw-TCP inbounds need a manual two-step setup after creating
-  them** (step 6 above): set up a Railway TCP Proxy pointing at the
-  internal port shown, then save the external host/port Railway
-  assigns back into the panel. Until that second step is done, the
-  client's share link is a placeholder string, not a working URI —
-  don't hand it out yet.
 - **There's no "forgot password" flow, and only one admin account
   exists.** If its password is lost, the only recovery paths are
   editing `password_hash` directly in the SQLite database, or wiping
-  `DATA_DIR` and starting over (losing all inbounds/clients too).
+  `DATA_DIR` and starting over (losing all inbounds too).
 - **The xray-core binary download can fail silently.**
   `scripts/install-xray.js` runs on every `npm install`/build and
   intentionally exits with code 0 even if the download fails (so a
   flaky network doesn't break your whole build). If it does fail
   (temporary network issue, or GitHub API rate-limiting the build
   server when `XRAY_VERSION` is unset and it has to look up the latest
-  release), the panel itself will start fine, but creating an inbound
-  will fail to spawn xray-core. Check your build logs for
-  `Failed to install xray-core` if inbounds aren't working after a
-  fresh deploy.
-- **Two WebSocket inbounds can't share the same path** — the panel
-  now rejects this at creation time, but it's worth knowing why: two
-  inbounds on the same path would silently misroute one of them's
-  clients through the other's xray-core inbound instead of just
-  failing loudly.
+  release), the panel itself will start fine, but xray-core will fail
+  to spawn. Check your build logs for `Failed to install xray-core` if
+  configs aren't working after a fresh deploy.
 - **`NODE_ENV=production` isn't set automatically.** Without it,
   session cookies aren't marked `secure`. Functionally the panel still
   works on Railway's HTTPS domain either way, but it's a best-practice

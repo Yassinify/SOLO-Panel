@@ -1,9 +1,10 @@
 // Builds an Xray-core JSON config from `inbounds` DB rows. Every
-// inbound is VLESS + REALITY (see docs/how-program-work.md): xray
-// binds 0.0.0.0 on an internal port that the admin points a Railway
-// TCP Proxy at, and REALITY handles TLS itself by borrowing a real
-// site's certificate identity — no Railway-side TLS termination and
-// no certificate of our own needed.
+// inbound is one (protocol x transport) combo (see
+// docs/how-program-work.md) listening on an internal 127.0.0.1 port
+// with `security: none` — Railway's edge terminates TLS for us and
+// forwards plain HTTP, and `src/xray/proxy.js` routes matching
+// WS/XHTTP/HTTPUpgrade requests on Railway's single public port to
+// the right internal port by path.
 // Pure functions only — no DB access, no process spawning.
 'use strict';
 
@@ -23,50 +24,46 @@ function statsTagForClient(inboundId) {
 }
 
 /**
- * Build a single Xray inbound object from one `inbounds` row. Binds
- * 0.0.0.0 so Railway's TCP Proxy (a separate, manually-configured
- * feature — see docs/how-program-work.md) can reach it directly on
- * this internal port.
+ * Build a single Xray inbound object from one `inbounds` row. Always
+ * binds 127.0.0.1 — never reached directly, only via the internal
+ * request proxy in `src/xray/proxy.js` (see module header above).
  */
 function buildInbound(inboundRow) {
-  const alpn = inboundRow.alpn.split(',').map((s) => s.trim()).filter(Boolean);
-
-  const streamSettings = {
-    network: inboundRow.transport, // 'tcp' or 'grpc'
-    security: 'reality',
-    realitySettings: {
-      show: false,
-      dest: inboundRow.reality_dest,
-      xver: 0,
-      serverNames: [inboundRow.reality_server_name],
-      privateKey: inboundRow.reality_private_key,
-      shortIds: [inboundRow.reality_short_id],
-      alpn,
-    },
-  };
-  if (inboundRow.transport === 'grpc') {
-    streamSettings.grpcSettings = { serviceName: inboundRow.grpc_service_name };
+  const streamSettings = { network: inboundRow.transport, security: 'none' };
+  if (inboundRow.transport === 'ws') {
+    streamSettings.wsSettings = { path: inboundRow.path };
   } else if (inboundRow.transport === 'xhttp') {
-    // 'auto' lets Xray pick GET (stream-down) vs POST (stream-up)
-    // per-request; the broadest-compatibility mode for XHTTP+REALITY.
-    streamSettings.xhttpSettings = { path: inboundRow.xhttp_path, mode: 'auto' };
+    // 'auto' lets Xray pick GET (stream-down) vs POST (stream-up) per-request.
+    streamSettings.xhttpSettings = { path: inboundRow.path, mode: 'auto' };
+  } else if (inboundRow.transport === 'httpupgrade') {
+    streamSettings.httpupgradeSettings = { path: inboundRow.path };
   }
 
-  const client = {
-    id: inboundRow.client_uuid,
-    email: statsTagForClient(inboundRow.id),
-  };
-  // XTLS Vision flow only applies to raw tcp, not grpc/xhttp.
-  if (inboundRow.transport === 'tcp') {
-    client.flow = 'xtls-rprx-vision';
+  const protocol = inboundRow.protocol;
+  let settings;
+  const email = statsTagForClient(inboundRow.id);
+
+  if (protocol === 'vless') {
+    settings = { clients: [{ id: inboundRow.client_uuid, email }], decryption: 'none' };
+  } else if (protocol === 'vmess') {
+    settings = { clients: [{ id: inboundRow.client_uuid, email }] };
+  } else if (protocol === 'trojan') {
+    settings = { clients: [{ password: inboundRow.trojan_password, email }] };
+  } else if (protocol === 'shadowsocks') {
+    settings = {
+      method: inboundRow.ss_method,
+      password: inboundRow.ss_password,
+      network: 'tcp,udp',
+      email,
+    };
   }
 
   return {
     tag: `inbound-${inboundRow.id}`,
-    listen: '0.0.0.0',
+    listen: '127.0.0.1',
     port: internalPortForInbound(inboundRow.id),
-    protocol: 'vless',
-    settings: { clients: [client], decryption: 'none' },
+    protocol,
+    settings,
     streamSettings,
   };
 }
