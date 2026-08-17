@@ -7,7 +7,10 @@
 // there is no Railway-edge-vs-internal asymmetry to account for here:
 // the link's security/fingerprint/ALPN describe exactly what xray-core
 // is doing. Host/port in the link are always the Railway TCP Proxy's
-// assigned external host/port, never the internal loopback port.
+// assigned external host/port, never the internal loopback port. The
+// host is shared across every inbound (one Railway service = one TCP
+// Proxy host), so it's passed in separately rather than read off the
+// inbound row — see `inbounds.js#getExternalHost`.
 'use strict';
 
 // There's no admin-entered name anymore (see docs/how-program-work.md
@@ -18,9 +21,9 @@ function labelForInbound(inbound) {
   return `${inbound.transport.toUpperCase()} (${inbound.alpn})`;
 }
 
-function buildClientLink({ inbound, publicHost }) {
-  if (!inbound.external_host || !inbound.external_port) {
-    return 'Set the external host/port (from your Railway TCP Proxy) on this inbound first';
+function buildClientLink({ inbound, externalHost }) {
+  if (!externalHost || !inbound.external_port) {
+    return null;
   }
 
   const remark = encodeURIComponent(labelForInbound(inbound));
@@ -43,7 +46,7 @@ function buildClientLink({ inbound, publicHost }) {
     params.set('mode', 'auto');
   }
 
-  return `vless://${inbound.client_uuid}@${inbound.external_host}:${inbound.external_port}?${params.toString()}#${remark}`;
+  return `vless://${inbound.client_uuid}@${externalHost}:${inbound.external_port}?${params.toString()}#${remark}`;
 }
 
 module.exports = { buildClientLink, labelForInbound };

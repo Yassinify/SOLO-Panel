@@ -56,7 +56,7 @@ secret, and a temporary ./data directory). In your Railway service →
 
 | Variable | Default if unset | Description |
 |---|---|---|
-| `ADMIN_PASSWORD` | `admin` | Password for the single admin account (username is always `admin`). Change this before sharing your panel's URL with anyone. |
+| `ADMIN_PASSWORD` | `admin` | Password for the single admin account (no username, password-only login). Change this before sharing your panel's URL with anyone. |
 | `SESSION_SECRET` | auto-generated | Random string used to sign session cookies. If unset, the panel generates one itself on first boot and stores it in the database — no need to come up with one yourself. |
 | `DATA_DIR` | `./data` | Directory for the SQLite database, generated xray config, and the auto-generated `SESSION_SECRET`. **Set this to your attached Volume's mount path** (step 3), or this data — including your admin account and inbounds — is wiped on every redeploy. |
 | `NODE_ENV` | — | Set to `production` so session cookies are marked secure. Recommended for any public deployment. |

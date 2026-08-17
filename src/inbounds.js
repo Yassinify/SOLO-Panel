@@ -11,7 +11,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const { db } = require('./db');
+const { db, getConfigValue, setConfigValue } = require('./db');
 const manager = require('./xray/manager');
 const { buildXrayConfig } = require('./xray/config');
 const {
@@ -92,22 +92,42 @@ function ensureGeneratedInbounds() {
 }
 
 /**
- * Save the Railway-assigned external host/port for this inbound's
- * Railway TCP Proxy. Set by the admin after manually configuring the
- * proxy in the Railway dashboard (see docs/how-program-work.md). No
- * xray reload needed — this only affects the client-facing share
- * link, not xray's own config.
+ * Save the Railway-assigned external port for one inbound's Railway
+ * TCP Proxy. Set by the admin after manually configuring the proxy in
+ * the Railway dashboard (see docs/how-program-work.md) — the host
+ * side of the address is shared across all inbounds, see
+ * `getExternalHost`/`setExternalHost` below. No xray reload needed —
+ * this only affects the client-facing share link, not xray's own
+ * config.
  */
-function setInboundExternalAddress(id, externalHost, externalPort) {
-  db.prepare('UPDATE inbounds SET external_host = ?, external_port = ? WHERE id = ?').run(
-    externalHost,
-    externalPort,
-    id
-  );
+function setInboundExternalPort(id, externalPort) {
+  db.prepare('UPDATE inbounds SET external_port = ? WHERE id = ?').run(externalPort, id);
 }
 
-function getInboundBySubscriptionId(subId) {
-  return db.prepare('SELECT * FROM inbounds WHERE subscription_id = ?').get(subId);
+// Every Railway TCP Proxy on the same service shares one host (only
+// the port differs per proxy), so the admin only ever enters this
+// once, not per inbound.
+function getExternalHost() {
+  return getConfigValue('external_host');
+}
+
+function setExternalHost(host) {
+  setConfigValue('external_host', host);
+}
+
+/**
+ * Unguessable token for the single combined subscription URL (see
+ * `GET /sub/:subId` in server.js), which returns every configured
+ * inbound's client link at once. Generated once and persisted, same
+ * pattern as `getOrCreateSessionSecret` in db.js.
+ */
+function getOrCreateGlobalSubscriptionId() {
+  const existing = getConfigValue('global_subscription_id');
+  if (existing) return existing;
+
+  const id = crypto.randomBytes(16).toString('hex');
+  setConfigValue('global_subscription_id', id);
+  return id;
 }
 
 /**
@@ -144,8 +164,10 @@ module.exports = {
   listInbounds,
   getInbound,
   ensureGeneratedInbounds,
-  setInboundExternalAddress,
-  getInboundBySubscriptionId,
+  setInboundExternalPort,
+  getExternalHost,
+  setExternalHost,
+  getOrCreateGlobalSubscriptionId,
   addClientTraffic,
   reloadXray,
 };

@@ -9,12 +9,13 @@
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
-<% if (typeof username !== 'undefined' && username) { %>
+<% if (typeof loggedIn !== 'undefined' && loggedIn) { %>
   <div class="topbar">
     <div class="topbar-side"></div>
     <a href="/" class="brand brand-center">SOLO<span>Panel</span></a>
     <div class="topbar-side topbar-user">
       <form class="inline" method="POST" action="/logout">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
         <button type="submit" class="btn btn-small">Log out</button>
       </form>
     </div>

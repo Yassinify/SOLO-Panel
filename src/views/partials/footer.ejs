@@ -1,29 +1,2 @@
-<div class="modal-backdrop" id="confirm-modal" onclick="if(event.target===this) closeConfirm()">
-  <div class="modal-box">
-    <h3>Are you sure?</h3>
-    <p class="muted" id="confirm-message"></p>
-    <div class="modal-actions">
-      <button type="button" class="btn" onclick="closeConfirm()">Cancel</button>
-      <button type="button" class="btn btn-danger" onclick="confirmOk()">Delete</button>
-    </div>
-  </div>
-</div>
-<script>
-  let confirmFormEl = null;
-  function requestConfirm(formEl, message) {
-    confirmFormEl = formEl;
-    document.getElementById('confirm-message').textContent = message;
-    document.getElementById('confirm-modal').classList.add('open');
-    return false;
-  }
-  function closeConfirm() {
-    document.getElementById('confirm-modal').classList.remove('open');
-    confirmFormEl = null;
-  }
-  function confirmOk() {
-    if (confirmFormEl) confirmFormEl.submit();
-    closeConfirm();
-  }
-</script>
 </body>
 </html>

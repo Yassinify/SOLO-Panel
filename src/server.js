@@ -8,7 +8,7 @@ const path = require('path');
 const express = require('express');
 const session = require('express-session');
 const { getOrCreateSessionSecret } = require('./db'); // also initializes SQLite DB and tables on startup
-const { seedAdminFromEnv, verifyLogin, requireAuth } = require('./auth');
+const { seedAdminFromEnv, verifyLogin, requireAuth, getOrCreateCsrfToken, requireCsrf } = require('./auth');
 const inbounds = require('./inbounds');
 const manager = require('./xray/manager');
 const { buildClientLink, labelForInbound } = require('./xray/links');
@@ -56,69 +56,86 @@ app.get('/health', (req, res) => {
 });
 
 // Public subscription endpoint: no auth, meant to be pasted into a
-// client app's "subscribe" URL field. Returns the inbound's client
-// share link base64-encoded (the standard subscription format most
-// VPN client apps expect), or 404 if the token doesn't match.
+// client app's "subscribe" URL field. Returns every configured
+// inbound's client share link, one per line, base64-encoded as a
+// whole (the standard multi-server subscription format), or 404 if
+// the token doesn't match.
 app.get('/sub/:subId', (req, res) => {
-  const inbound = inbounds.getInboundBySubscriptionId(req.params.subId);
-  if (!inbound) return res.status(404).send('Not found');
+  if (req.params.subId !== inbounds.getOrCreateGlobalSubscriptionId()) {
+    return res.status(404).send('Not found');
+  }
 
-  const publicHost = req.get('host');
-  const link = buildClientLink({ inbound, publicHost });
-  res.type('text/plain').send(Buffer.from(link).toString('base64'));
+  const externalHost = inbounds.getExternalHost();
+  const links = inbounds
+    .listInbounds()
+    .map((row) => buildClientLink({ inbound: row, externalHost }))
+    .filter(Boolean);
+  res.type('text/plain').send(Buffer.from(links.join('\n')).toString('base64'));
 });
 
 app.get('/login', (req, res) => {
   if (req.session && req.session.adminId) {
     return res.redirect('/');
   }
-  res.render('login', { error: null });
+  res.render('login', { error: null, csrfToken: getOrCreateCsrfToken(req) });
 });
 
-app.post('/login', (req, res) => {
-  const { username, password } = req.body;
-  const user = verifyLogin(username, password);
+app.post('/login', requireCsrf, (req, res) => {
+  const { password } = req.body;
+  const user = verifyLogin(password);
 
   if (!user) {
-    return res.render('login', { error: 'Invalid username or password.' });
+    return res.render('login', { error: 'Invalid password.', csrfToken: getOrCreateCsrfToken(req) });
   }
 
   req.session.adminId = user.id;
-  req.session.username = user.username;
   res.redirect('/');
 });
 
-app.post('/logout', (req, res) => {
+app.post('/logout', requireCsrf, (req, res) => {
   req.session.destroy(() => {
     res.redirect('/login');
   });
 });
 
 app.get('/', requireAuth, (req, res) => {
-  const publicHost = req.get('host');
+  const externalHost = inbounds.getExternalHost();
   const rows = inbounds.listInbounds().map((row) => ({
     ...row,
     label: labelForInbound(row),
     internalPort: internalPortForInbound(row.id),
-    link: buildClientLink({ inbound: row, publicHost }),
-    subLink: `${req.protocol}://${publicHost}/sub/${row.subscription_id}`,
+    link: buildClientLink({ inbound: row, externalHost }),
     totalTraffic: formatBytes(row.up_bytes + row.down_bytes),
   }));
+  const subLink = `${req.protocol}://${req.get('host')}/sub/${inbounds.getOrCreateGlobalSubscriptionId()}`;
   res.render('dashboard', {
-    username: req.session.username,
+    loggedIn: true,
+    csrfToken: getOrCreateCsrfToken(req),
     inbounds: rows,
+    externalHost,
+    subLink,
     qrIconSvg: QR_ICON_SVG,
     formatBytes,
   });
 });
 
-// Saves the Railway-assigned external host/port for this inbound's
-// Railway TCP Proxy, once the admin has manually set that up pointing
-// at this inbound's internal port.
-app.post('/inbounds/:id/external', requireAuth, (req, res) => {
-  const { externalHost, externalPort } = req.body;
-  if (externalHost && externalPort) {
-    inbounds.setInboundExternalAddress(req.params.id, externalHost, Number(externalPort));
+// Saves the shared Railway TCP Proxy host, used by every inbound's
+// share link (only the port differs per inbound, see below).
+app.post('/settings/host', requireAuth, requireCsrf, (req, res) => {
+  const { externalHost } = req.body;
+  if (externalHost) {
+    inbounds.setExternalHost(externalHost);
+  }
+  res.redirect('/');
+});
+
+// Saves the Railway-assigned external port for this inbound's Railway
+// TCP Proxy, once the admin has manually set that up pointing at this
+// inbound's internal port.
+app.post('/inbounds/:id/port', requireAuth, requireCsrf, (req, res) => {
+  const { externalPort } = req.body;
+  if (externalPort) {
+    inbounds.setInboundExternalPort(req.params.id, Number(externalPort));
   }
   res.redirect('/');
 });

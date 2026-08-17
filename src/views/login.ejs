@@ -1,4 +1,4 @@
-<%- include('partials/header', { title: 'Log in', username: null }) %>
+<%- include('partials/header', { title: 'Log in', loggedIn: false }) %>
 <div class="login-shell">
   <div class="card login-card">
     <h1 style="margin-bottom:4px;">SOLO<span style="color:var(--accent);">Panel</span></h1>
@@ -7,10 +7,9 @@
       <p class="error"><%= error %></p>
     <% } %>
     <form method="POST" action="/login">
-      <label>Username</label>
-      <input type="text" name="username" required autofocus />
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
       <label>Password</label>
-      <input type="password" name="password" required />
+      <input type="password" name="password" required autofocus />
       <button type="submit" class="btn btn-accent" style="width:100%; margin-top:20px;">Log in</button>
     </form>
   </div>

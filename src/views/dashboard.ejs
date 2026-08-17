@@ -1,18 +1,34 @@
-<%- include('partials/header', { title: 'Inbounds', username: username }) %>
+<%- include('partials/header', { title: 'Inbounds', loggedIn: loggedIn, csrfToken: csrfToken }) %>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <div class="container">
   <div class="page-header">
     <h1>Inbounds</h1>
   </div>
 
-  <div class="card empty-state">
-    <p>
+  <div class="card">
+    <p class="muted" style="margin-top:0;">
       One VLESS+REALITY config is auto-generated for every supported
       transport/ALPN combination, all sharing the same client identity.
-      For each one below, add a Railway TCP Proxy pointing at its
-      internal port, then paste the Railway-assigned external host/port
-      here to activate its share link.
+      Enter your Railway TCP Proxy host once here (it's the same for
+      every proxy on this service), then add a TCP Proxy per inbound
+      below and fill in just its port.
     </p>
+    <form method="POST" action="/settings/host" class="form-row">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
+      <div style="flex:1;">
+        <label style="margin-top:0;">Railway TCP Proxy host</label>
+        <input type="text" name="externalHost" placeholder="e.g. roundhouse.proxy.rlwy.net" value="<%= externalHost || '' %>" required />
+      </div>
+      <button type="submit" class="btn" style="height:41px;">Save</button>
+    </form>
+
+    <div style="margin-top:14px;">
+      <label style="margin-top:0;">Subscription link (all configs)</label>
+      <div class="link-box">
+        <code id="sub-all" class="muted" title="Click to copy" onclick="copyLink('sub-all')"><%= subLink %></code>
+        <button type="button" class="btn btn-small qr-icon-btn" title="Show QR" onclick="showQr('sub-all')"><%- qrIconSvg %></button>
+      </div>
+    </div>
   </div>
 
   <% inbounds.forEach((inbound) => { %>
@@ -26,11 +42,8 @@
           </div>
         </div>
 
-        <form method="POST" action="/inbounds/<%= inbound.id %>/external" class="form-row">
-          <div style="flex:1;">
-            <label style="margin-top:0;">Railway TCP Proxy host</label>
-            <input type="text" name="externalHost" placeholder="e.g. roundhouse.proxy.rlwy.net" value="<%= inbound.external_host || '' %>" required />
-          </div>
+        <form method="POST" action="/inbounds/<%= inbound.id %>/port" class="form-row">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>" />
           <div style="width:140px;">
             <label style="margin-top:0;">Port</label>
             <input type="text" name="externalPort" placeholder="e.g. 21012" value="<%= inbound.external_port || '' %>" required />
@@ -40,15 +53,14 @@
 
         <div style="margin-top:14px;">
           <label style="margin-top:0;">Client link</label>
-          <div class="link-box">
-            <code id="link-<%= inbound.id %>" title="Click to copy" onclick="copyLink('link-<%= inbound.id %>')"><%= inbound.link %></code>
-            <button type="button" class="btn btn-small qr-icon-btn" title="Show QR" onclick="showQr('link-<%= inbound.id %>')"><%- qrIconSvg %></button>
-          </div>
-          <label>Subscription link</label>
-          <div class="link-box">
-            <code id="sub-<%= inbound.id %>" class="muted" title="Click to copy" onclick="copyLink('sub-<%= inbound.id %>')"><%= inbound.subLink %></code>
-            <button type="button" class="btn btn-small qr-icon-btn" title="Show QR" onclick="showQr('sub-<%= inbound.id %>')"><%- qrIconSvg %></button>
-          </div>
+          <% if (inbound.link) { %>
+            <div class="link-box">
+              <code id="link-<%= inbound.id %>" title="Click to copy" onclick="copyLink('link-<%= inbound.id %>')"><%= inbound.link %></code>
+              <button type="button" class="btn btn-small qr-icon-btn" title="Show QR" onclick="showQr('link-<%= inbound.id %>')"><%- qrIconSvg %></button>
+            </div>
+          <% } else { %>
+            <p class="muted" style="margin-top:6px;">Set the host above and this inbound's port to activate its link.</p>
+          <% } %>
           <p class="muted mono" style="margin-top:10px; margin-bottom:0;">&uarr;<%= formatBytes(inbound.up_bytes) %> &darr;<%= formatBytes(inbound.down_bytes) %></p>
         </div>
       </div>

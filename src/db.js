@@ -20,12 +20,22 @@ if (!fs.existsSync(DATA_DIR)) {
 const db = new Database(DB_PATH);
 db.pragma('journal_mode = WAL');
 
-// Admin users table: single/multiple panel administrators who can log in.
-// Password storage strategy (hashing) will be decided when auth is built.
+// Admin users table: single panel administrator, password-only login
+// (no username field — see auth.js). If an older-shape table exists
+// (has a `username` column), drop and recreate it fresh, same pattern
+// as the `inbounds` migration below; the admin just re-logs-in with
+// ADMIN_PASSWORD after upgrade.
+const existingAdminColumns = db
+  .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='admin_users'")
+  .get()
+  ? db.prepare('PRAGMA table_info(admin_users)').all().map((c) => c.name)
+  : [];
+if (existingAdminColumns.includes('username')) {
+  db.exec('DROP TABLE admin_users');
+}
 db.exec(`
   CREATE TABLE IF NOT EXISTS admin_users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -37,14 +47,16 @@ db.exec(`
 // Railway + REALITY can actually support (see
 // `inbounds.js#ensureGeneratedInbounds` and docs/how-program-work.md),
 // all sharing one REALITY keypair and one client UUID so every row is
-// just a different front door to the same account. `external_host`/
-// `external_port` hold the Railway TCP Proxy address the admin sets
-// up per row (one TCP Proxy per internal port, external port is
-// Railway-assigned). `transport` is 'tcp' (raw, XTLS Vision), 'grpc',
-// or 'xhttp'. This is a breaking schema change from the earlier
-// admin-managed-inbounds design: if an `inbounds` table already
-// exists in an old shape (has a `remark` column, which the new schema
-// no longer has), drop and recreate it fresh rather than attempt a
+// just a different front door to the same account. `external_port`
+// holds the Railway-assigned TCP Proxy port for this row's internal
+// port; the host is NOT stored per row anymore — every TCP Proxy on
+// the same Railway service shares one host, so that lives once in
+// `app_config` (see `getExternalHost`/`setExternalHost` below).
+// `transport` is 'tcp' (raw, XTLS Vision), 'grpc', or 'xhttp'. This is
+// a breaking schema change from the earlier admin-managed-inbounds
+// design: if an `inbounds` table already exists in an old shape (has
+// a `remark` or `external_host` column, neither of which the new
+// schema has), drop and recreate it fresh rather than attempt a
 // column-by-column migration — old inbounds are not carried forward,
 // they get regenerated automatically on next boot. Leaves an
 // already-new-shape table alone.
@@ -53,7 +65,11 @@ const existingInboundColumns = db
   .get()
   ? db.prepare('PRAGMA table_info(inbounds)').all().map((c) => c.name)
   : [];
-if (existingInboundColumns.includes('remark') || existingInboundColumns.includes('protocol')) {
+if (
+  existingInboundColumns.includes('remark') ||
+  existingInboundColumns.includes('protocol') ||
+  existingInboundColumns.includes('external_host')
+) {
   db.exec('DROP TABLE inbounds');
 }
 db.exec(`
@@ -73,7 +89,6 @@ db.exec(`
     subscription_id TEXT NOT NULL,
     up_bytes INTEGER NOT NULL DEFAULT 0,
     down_bytes INTEGER NOT NULL DEFAULT 0,
-    external_host TEXT,
     external_port INTEGER,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -113,4 +128,17 @@ function getOrCreateSessionSecret() {
   return secret;
 }
 
-module.exports = { db, getOrCreateSessionSecret };
+/** Read a value from `app_config`, or null if it was never set. */
+function getConfigValue(key) {
+  const row = db.prepare('SELECT value FROM app_config WHERE key = ?').get(key);
+  return row ? row.value : null;
+}
+
+/** Insert-or-update a value in `app_config`. */
+function setConfigValue(key, value) {
+  db.prepare(
+    'INSERT INTO app_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
+  ).run(key, value);
+}
+
+module.exports = { db, getOrCreateSessionSecret, getConfigValue, setConfigValue };

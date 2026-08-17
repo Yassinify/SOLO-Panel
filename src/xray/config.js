@@ -73,7 +73,8 @@ function buildInbound(inboundRow) {
 
 /**
  * Build the full Xray config object.
- * @param {Array} inboundRows - rows from the `inbounds` table (enabled ones only, caller filters).
+ * @param {Array} inboundRows - rows from the `inbounds` table (all
+ *   rows are always active — there is no enabled/disabled flag).
  */
 function buildXrayConfig(inboundRows) {
   return {
