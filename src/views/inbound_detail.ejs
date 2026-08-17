@@ -1,0 +1,104 @@
+<%- include('partials/header', { title: inbound.remark, username: username }) %>
+<div class="container">
+  <div class="page-header">
+    <div>
+      <h1><%= inbound.remark %></h1>
+      <p class="muted" style="margin-top:-10px;">
+        <%= inbound.protocol %> ·
+        <% if (inbound.transport === 'tcp') { %>
+          raw TCP
+        <% } else { %>
+          <span class="mono"><%= inbound.listen_path %></span>
+        <% } %>
+      </p>
+    </div>
+    <a href="/" class="btn">&larr; All inbounds</a>
+  </div>
+
+  <% if (inbound.transport === 'tcp') { %>
+    <div class="card">
+      <h2>Railway TCP Proxy setup</h2>
+      <p class="muted">
+        This inbound listens internally on <span class="mono">0.0.0.0:<%= internalPort %></span>.
+        In the Railway dashboard, open this service &rarr; Settings &rarr; Networking &rarr;
+        TCP Proxy, and point a new TCP Proxy at internal port <%= internalPort %>.
+        Railway will assign an external host and port — enter them below once known.
+        Raw TCP has no TLS termination from Railway; this transport is plaintext
+        unless you layer encryption yourself.
+      </p>
+      <form method="POST" action="/inbounds/<%= inbound.id %>/external" style="display:flex; gap:10px; align-items:flex-end; margin-top:12px;">
+        <div style="flex:1;">
+          <label style="margin-top:0;">External host</label>
+          <input type="text" name="externalHost" placeholder="e.g. roundhouse.proxy.rlwy.net" value="<%= inbound.external_host || '' %>" required />
+        </div>
+        <div style="width:140px;">
+          <label style="margin-top:0;">External port</label>
+          <input type="text" name="externalPort" placeholder="e.g. 21012" value="<%= inbound.external_port || '' %>" required />
+        </div>
+        <button type="submit" class="btn btn-accent">Save</button>
+      </form>
+    </div>
+  <% } %>
+
+  <div class="card">
+    <h2>Add client</h2>
+    <form method="POST" action="/inbounds/<%= inbound.id %>/clients" style="display:flex; gap:10px; align-items:flex-end;">
+      <div style="flex:1;">
+        <label style="margin-top:0;">Email / label</label>
+        <input type="text" name="email" placeholder="e.g. alice" required />
+      </div>
+      <button type="submit" class="btn btn-accent">Add client</button>
+    </form>
+  </div>
+
+  <div class="card" style="padding:0;">
+    <table>
+      <thead>
+        <tr>
+          <th>Status</th>
+          <th>Email</th>
+          <th>Traffic</th>
+          <th>Share link</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (clients.length === 0) { %>
+          <tr><td colspan="5" class="muted" style="text-align:center; padding:24px;">No clients yet.</td></tr>
+        <% } %>
+        <% clients.forEach((client) => { %>
+          <tr>
+            <td><span class="status-dot <%= client.enabled ? 'on' : '' %>"></span></td>
+            <td><%= client.email %></td>
+            <td class="mono">&uarr;<%= formatBytes(client.up_bytes) %> &darr;<%= formatBytes(client.down_bytes) %></td>
+            <td>
+              <div class="link-box">
+                <code id="link-<%= client.id %>"><%= links[client.id] %></code>
+                <button type="button" class="btn btn-small" onclick="copyLink('link-<%= client.id %>')">Copy</button>
+              </div>
+              <div class="link-box" style="margin-top:6px;">
+                <code id="sub-<%= client.id %>" class="muted"><%= subLinks[client.id] %></code>
+                <button type="button" class="btn btn-small" onclick="copyLink('sub-<%= client.id %>')">Copy sub</button>
+              </div>
+            </td>
+            <td style="text-align:right; white-space:nowrap;">
+              <form class="inline" method="POST" action="/inbounds/<%= inbound.id %>/clients/<%= client.id %>/toggle">
+                <button type="submit" class="btn btn-small"><%= client.enabled ? 'Disable' : 'Enable' %></button>
+              </form>
+              <form class="inline" method="POST" action="/inbounds/<%= inbound.id %>/clients/<%= client.id %>/delete" onsubmit="return confirm('Remove this client?');">
+                <button type="submit" class="btn btn-small btn-danger">Remove</button>
+              </form>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</div>
+<script>
+  function copyLink(elementId) {
+    const text = document.getElementById(elementId).textContent;
+    navigator.clipboard.writeText(text);
+  }
+</script>
+<%- include('partials/footer') %>

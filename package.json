@@ -1,0 +1,25 @@
+{
+  "name": "solo-panel",
+  "version": "0.1.0",
+  "description": "Node.js web panel for managing Xray-core inbounds, deployable on Railway.com",
+  "private": true,
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "postinstall": "node scripts/install-xray.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ejs": "^3.1.10",
+    "better-sqlite3": "^11.3.0",
+    "express-session": "^1.18.0",
+    "bcryptjs": "^2.4.3",
+    "adm-zip": "^0.5.16"
+  },
+  "allowScripts": {
+    "better-sqlite3": true
+  }
+}

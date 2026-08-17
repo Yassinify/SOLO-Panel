@@ -1,0 +1,18 @@
+<%- include('partials/header', { title: 'Log in', username: null }) %>
+<div class="login-shell">
+  <div class="card login-card">
+    <h1 style="margin-bottom:4px;">SOLO<span style="color:var(--accent);">Panel</span></h1>
+    <p class="muted" style="margin:0 0 20px;">Sign in to manage inbounds.</p>
+    <% if (error) { %>
+      <p class="error"><%= error %></p>
+    <% } %>
+    <form method="POST" action="/login">
+      <label>Username</label>
+      <input type="text" name="username" required autofocus />
+      <label>Password</label>
+      <input type="password" name="password" required />
+      <button type="submit" class="btn btn-accent" style="width:100%; margin-top:20px;">Log in</button>
+    </form>
+  </div>
+</div>
+<%- include('partials/footer') %>

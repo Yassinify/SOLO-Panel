@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title><%= title %> — SOLO Panel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+<% if (typeof username !== 'undefined' && username) { %>
+  <div class="topbar">
+    <div class="brand">SOLO<span>Panel</span></div>
+    <nav class="topbar-nav">
+      <a href="/">Inbounds</a>
+      <a href="/admins">Admins</a>
+    </nav>
+    <div class="topbar-user">
+      <span><%= username %></span>
+      <form class="inline" method="POST" action="/logout">
+        <button type="submit" class="btn btn-small">Log out</button>
+      </form>
+    </div>
+  </div>
+<% } %>

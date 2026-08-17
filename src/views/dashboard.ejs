@@ -1,0 +1,59 @@
+<%- include('partials/header', { title: 'Inbounds', username: username }) %>
+<div class="container">
+  <div class="page-header">
+    <h1>Inbounds</h1>
+    <a href="/inbounds/new" class="btn btn-accent">+ New inbound</a>
+  </div>
+
+  <% if (inbounds.length === 0) { %>
+    <div class="card empty-state">
+      <p>No inbounds yet. Create one to start issuing client links.</p>
+      <a href="/inbounds/new" class="btn btn-accent">+ New inbound</a>
+    </div>
+  <% } else { %>
+    <div class="card" style="padding:0;">
+      <table>
+        <thead>
+          <tr>
+            <th>Status</th>
+            <th>Remark</th>
+            <th>Protocol</th>
+            <th>Path</th>
+            <th>Clients</th>
+            <th>Traffic</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          <% inbounds.forEach((inbound) => { %>
+            <tr>
+              <td><span class="status-dot <%= inbound.enabled ? 'on' : '' %>"></span><%= inbound.enabled ? 'Enabled' : 'Disabled' %></td>
+              <td><a href="/inbounds/<%= inbound.id %>"><%= inbound.remark %></a></td>
+              <td><%= inbound.protocol %></td>
+              <td class="mono">
+                <% if (inbound.transport === 'tcp') { %>
+                  tcp<%= inbound.external_port ? ':' + inbound.external_port : ' (unconfigured)' %>
+                <% } else { %>
+                  <%= inbound.listen_path %>
+                <% } %>
+              </td>
+              <td><%= inbound.clientCount %></td>
+              <td class="mono"><%= inbound.totalTraffic %></td>
+              <td style="text-align:right; white-space:nowrap;">
+                <form class="inline" method="POST" action="/inbounds/<%= inbound.id %>/toggle">
+                  <button type="submit" class="btn btn-small"><%= inbound.enabled ? 'Disable' : 'Enable' %></button>
+                </form>
+                <form class="inline" method="POST" action="/inbounds/<%= inbound.id %>/delete" onsubmit="return confirm('Delete this inbound and all its clients?');">
+                  <button type="submit" class="btn btn-small btn-danger">Delete</button>
+                </form>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+
+  <p class="muted">xray-core process: <%= xrayRunning ? 'running' : 'stopped' %></p>
+</div>
+<%- include('partials/footer') %>

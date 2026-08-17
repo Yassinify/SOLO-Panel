@@ -1,0 +1,57 @@
+<%- include('partials/header', { title: 'New inbound', username: username }) %>
+<div class="container" style="max-width:560px;">
+  <div class="page-header">
+    <h1>New inbound</h1>
+    <a href="/" class="btn">Cancel</a>
+  </div>
+  <% if (error) { %>
+    <p class="error"><%= error %></p>
+  <% } %>
+  <div class="card">
+    <form method="POST" action="/inbounds">
+      <label>Remark (a name you'll recognize it by)</label>
+      <input type="text" name="remark" placeholder="e.g. main-vless" required autofocus />
+
+      <label>Protocol</label>
+      <select name="protocol" required>
+        <option value="vless">VLESS</option>
+        <option value="vmess">VMess</option>
+        <option value="trojan">Trojan</option>
+        <option value="shadowsocks">Shadowsocks</option>
+      </select>
+
+      <label>Transport</label>
+      <select name="transport" id="transport" required>
+        <option value="ws">WebSocket (shares Railway's HTTPS port)</option>
+        <option value="tcp">Raw TCP (via a Railway TCP Proxy you configure manually)</option>
+      </select>
+
+      <div id="wsPathField">
+        <label>WebSocket path</label>
+        <input type="text" name="listenPath" value="/<%= randomPath %>" />
+        <p class="muted" style="margin-top:6px;">
+          Runs as WebSocket over Railway's single HTTPS port (TLS is terminated
+          at Railway's edge). Keep this path random/unguessable — it works like
+          a shared secret alongside each client's own credentials.
+        </p>
+      </div>
+      <p class="muted" id="tcpNote" style="display:none; margin-top:6px;">
+        After creating this inbound, you'll see an internal port to point a
+        Railway TCP Proxy at (set up manually in the Railway dashboard, under
+        this service's Settings &rarr; Networking &rarr; TCP Proxy). Raw TCP
+        has no TLS termination from Railway, so this transport is plaintext
+        unless you layer encryption yourself.
+      </p>
+
+      <button type="submit" class="btn btn-accent" style="margin-top:20px;">Create inbound</button>
+    </form>
+  </div>
+</div>
+<script>
+  document.getElementById('transport').addEventListener('change', function () {
+    var isTcp = this.value === 'tcp';
+    document.getElementById('wsPathField').style.display = isTcp ? 'none' : 'block';
+    document.getElementById('tcpNote').style.display = isTcp ? 'block' : 'none';
+  });
+</script>
+<%- include('partials/footer') %>
