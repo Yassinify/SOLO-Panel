@@ -11,12 +11,9 @@
 <body>
 <% if (typeof username !== 'undefined' && username) { %>
   <div class="topbar">
-    <div class="brand">SOLO<span>Panel</span></div>
-    <nav class="topbar-nav">
-      <a href="/">Inbounds</a>
-    </nav>
-    <div class="topbar-user">
-      <span><%= username %></span>
+    <div class="topbar-side"></div>
+    <a href="/" class="brand brand-center">SOLO<span>Panel</span></a>
+    <div class="topbar-side topbar-user">
       <form class="inline" method="POST" action="/logout">
         <button type="submit" class="btn btn-small">Log out</button>
       </form>

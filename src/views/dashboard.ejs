@@ -1,59 +1,100 @@
 <%- include('partials/header', { title: 'Inbounds', username: username }) %>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <div class="container">
   <div class="page-header">
     <h1>Inbounds</h1>
-    <a href="/inbounds/new" class="btn btn-accent">+ New inbound</a>
   </div>
 
-  <% if (inbounds.length === 0) { %>
-    <div class="card empty-state">
-      <p>No inbounds yet. Create one to start issuing client links.</p>
-      <a href="/inbounds/new" class="btn btn-accent">+ New inbound</a>
-    </div>
-  <% } else { %>
-    <div class="card" style="padding:0;">
-      <table>
-        <thead>
-          <tr>
-            <th>Status</th>
-            <th>Remark</th>
-            <th>Protocol</th>
-            <th>Path</th>
-            <th>Clients</th>
-            <th>Traffic</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <% inbounds.forEach((inbound) => { %>
-            <tr>
-              <td><span class="status-dot <%= inbound.enabled ? 'on' : '' %>"></span><%= inbound.enabled ? 'Enabled' : 'Disabled' %></td>
-              <td><a href="/inbounds/<%= inbound.id %>"><%= inbound.remark %></a></td>
-              <td><%= inbound.protocol %></td>
-              <td class="mono">
-                <% if (inbound.transport === 'tcp') { %>
-                  tcp<%= inbound.external_port ? ':' + inbound.external_port : ' (unconfigured)' %>
-                <% } else { %>
-                  <%= inbound.listen_path %>
-                <% } %>
-              </td>
-              <td><%= inbound.clientCount %></td>
-              <td class="mono"><%= inbound.totalTraffic %></td>
-              <td style="text-align:right; white-space:nowrap;">
-                <form class="inline" method="POST" action="/inbounds/<%= inbound.id %>/toggle">
-                  <button type="submit" class="btn btn-small"><%= inbound.enabled ? 'Disable' : 'Enable' %></button>
-                </form>
-                <form class="inline" method="POST" action="/inbounds/<%= inbound.id %>/delete" onsubmit="return confirm('Delete this inbound and all its clients?');">
-                  <button type="submit" class="btn btn-small btn-danger">Delete</button>
-                </form>
-              </td>
-            </tr>
-          <% }) %>
-        </tbody>
-      </table>
-    </div>
-  <% } %>
+  <div class="card empty-state">
+    <p>
+      One VLESS+REALITY config is auto-generated for every supported
+      transport/ALPN combination, all sharing the same client identity.
+      For each one below, add a Railway TCP Proxy pointing at its
+      internal port, then paste the Railway-assigned external host/port
+      here to activate its share link.
+    </p>
+  </div>
 
-  <p class="muted">xray-core process: <%= xrayRunning ? 'running' : 'stopped' %></p>
+  <% inbounds.forEach((inbound) => { %>
+      <div class="card">
+        <div class="page-header" style="margin-bottom:14px;">
+          <div>
+            <h2 style="margin-bottom:4px;"><%= inbound.label %></h2>
+            <p class="muted" style="margin:0;">
+              VLESS · REALITY · fp=<%= inbound.fingerprint %> · internal port <%= inbound.internalPort %>
+            </p>
+          </div>
+        </div>
+
+        <form method="POST" action="/inbounds/<%= inbound.id %>/external" class="form-row">
+          <div style="flex:1;">
+            <label style="margin-top:0;">Railway TCP Proxy host</label>
+            <input type="text" name="externalHost" placeholder="e.g. roundhouse.proxy.rlwy.net" value="<%= inbound.external_host || '' %>" required />
+          </div>
+          <div style="width:140px;">
+            <label style="margin-top:0;">Port</label>
+            <input type="text" name="externalPort" placeholder="e.g. 21012" value="<%= inbound.external_port || '' %>" required />
+          </div>
+          <button type="submit" class="btn" style="height:41px;">Save</button>
+        </form>
+
+        <div style="margin-top:14px;">
+          <label style="margin-top:0;">Client link</label>
+          <div class="link-box">
+            <code id="link-<%= inbound.id %>" title="Click to copy" onclick="copyLink('link-<%= inbound.id %>')"><%= inbound.link %></code>
+            <button type="button" class="btn btn-small qr-icon-btn" title="Show QR" onclick="showQr('link-<%= inbound.id %>')"><%- qrIconSvg %></button>
+          </div>
+          <label>Subscription link</label>
+          <div class="link-box">
+            <code id="sub-<%= inbound.id %>" class="muted" title="Click to copy" onclick="copyLink('sub-<%= inbound.id %>')"><%= inbound.subLink %></code>
+            <button type="button" class="btn btn-small qr-icon-btn" title="Show QR" onclick="showQr('sub-<%= inbound.id %>')"><%- qrIconSvg %></button>
+          </div>
+          <p class="muted mono" style="margin-top:10px; margin-bottom:0;">&uarr;<%= formatBytes(inbound.up_bytes) %> &darr;<%= formatBytes(inbound.down_bytes) %></p>
+        </div>
+      </div>
+  <% }) %>
 </div>
+
+<div class="modal-backdrop" id="qr-modal" onclick="if(event.target===this) closeQr()">
+  <div class="modal-box">
+    <h3>Scan to import</h3>
+    <p class="muted">Open your VPN client app and scan this code.</p>
+    <div class="modal-qr" id="qr-canvas"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn" onclick="closeQr()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="copy-toast">Copied to clipboard</div>
+<script>
+  function copyLink(elementId) {
+    const text = document.getElementById(elementId).textContent;
+    navigator.clipboard.writeText(text).then(function () {
+      const toast = document.getElementById('copy-toast');
+      toast.classList.add('show');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 1800);
+    });
+  }
+
+  let qrInstance = null;
+  function showQr(elementId) {
+    const text = document.getElementById(elementId).textContent;
+    const holder = document.getElementById('qr-canvas');
+    holder.innerHTML = '';
+    qrInstance = new QRCode(holder, {
+      text: text,
+      width: 220,
+      height: 220,
+      colorDark: '#0a0f1a',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M,
+    });
+    document.getElementById('qr-modal').classList.add('open');
+  }
+  function closeQr() {
+    document.getElementById('qr-modal').classList.remove('open');
+  }
+</script>
 <%- include('partials/footer') %>

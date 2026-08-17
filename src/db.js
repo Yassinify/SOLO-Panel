@@ -31,81 +31,58 @@ db.exec(`
   );
 `);
 
-// Inbounds table: one row per Xray-core inbound the panel manages.
-// `config_json` holds the protocol-specific settings/streamSettings
-// fragment used when generating the full Xray config (see
-// docs/how-program-work.md for why everything runs over the single
-// Railway HTTP port via WebSocket/gRPC/XHTTP).
-// `transport` is 'ws' (default, shares the single Railway HTTP port)
-// or 'tcp' (raw TCP via a manually-configured Railway TCP Proxy;
-// `external_host`/`external_port` hold the Railway-assigned address
-// once the admin sets that up — see docs/how-program-work.md).
+// Inbounds table: one row per auto-generated Xray-core inbound. The
+// panel no longer lets the admin hand-create/name inbounds — instead
+// it seeds exactly one row per (transport x alpn) combination that
+// Railway + REALITY can actually support (see
+// `inbounds.js#ensureGeneratedInbounds` and docs/how-program-work.md),
+// all sharing one REALITY keypair and one client UUID so every row is
+// just a different front door to the same account. `external_host`/
+// `external_port` hold the Railway TCP Proxy address the admin sets
+// up per row (one TCP Proxy per internal port, external port is
+// Railway-assigned). `transport` is 'tcp' (raw, XTLS Vision), 'grpc',
+// or 'xhttp'. This is a breaking schema change from the earlier
+// admin-managed-inbounds design: if an `inbounds` table already
+// exists in an old shape (has a `remark` column, which the new schema
+// no longer has), drop and recreate it fresh rather than attempt a
+// column-by-column migration — old inbounds are not carried forward,
+// they get regenerated automatically on next boot. Leaves an
+// already-new-shape table alone.
+const existingInboundColumns = db
+  .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='inbounds'")
+  .get()
+  ? db.prepare('PRAGMA table_info(inbounds)').all().map((c) => c.name)
+  : [];
+if (existingInboundColumns.includes('remark') || existingInboundColumns.includes('protocol')) {
+  db.exec('DROP TABLE inbounds');
+}
 db.exec(`
   CREATE TABLE IF NOT EXISTS inbounds (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    remark TEXT NOT NULL,
-    protocol TEXT NOT NULL,
-    listen_path TEXT,
-    enabled INTEGER NOT NULL DEFAULT 1,
-    config_json TEXT NOT NULL,
-    transport TEXT NOT NULL DEFAULT 'ws',
+    transport TEXT NOT NULL,
+    fingerprint TEXT NOT NULL DEFAULT 'chrome',
+    alpn TEXT NOT NULL,
+    grpc_service_name TEXT,
+    xhttp_path TEXT,
+    reality_dest TEXT NOT NULL,
+    reality_server_name TEXT NOT NULL,
+    reality_private_key TEXT NOT NULL,
+    reality_public_key TEXT NOT NULL,
+    reality_short_id TEXT NOT NULL,
+    client_uuid TEXT NOT NULL,
+    subscription_id TEXT NOT NULL,
+    up_bytes INTEGER NOT NULL DEFAULT 0,
+    down_bytes INTEGER NOT NULL DEFAULT 0,
     external_host TEXT,
     external_port INTEGER,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `);
 
-// Migration: add transport/external_host/external_port to installs
-// created before these columns existed.
-const inboundColumns = db.prepare('PRAGMA table_info(inbounds)').all().map((c) => c.name);
-if (!inboundColumns.includes('transport')) {
-  db.exec("ALTER TABLE inbounds ADD COLUMN transport TEXT NOT NULL DEFAULT 'ws'");
-}
-if (!inboundColumns.includes('external_host')) {
-  db.exec('ALTER TABLE inbounds ADD COLUMN external_host TEXT');
-}
-if (!inboundColumns.includes('external_port')) {
-  db.exec('ALTER TABLE inbounds ADD COLUMN external_port INTEGER');
-}
-
-// Inbound clients table: individual clients (users) attached to an
-// inbound, each with their own UUID/password and traffic accounting.
-db.exec(`
-  CREATE TABLE IF NOT EXISTS inbound_clients (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    inbound_id INTEGER NOT NULL REFERENCES inbounds(id) ON DELETE CASCADE,
-    email TEXT NOT NULL,
-    client_uuid TEXT NOT NULL,
-    enabled INTEGER NOT NULL DEFAULT 1,
-    total_bytes_limit INTEGER NOT NULL DEFAULT 0,
-    expiry_time INTEGER NOT NULL DEFAULT 0,
-    up_bytes INTEGER NOT NULL DEFAULT 0,
-    down_bytes INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
-  );
-`);
-
-// Migration: add subscription_id (public, unguessable token used by
-// GET /sub/:subId to serve a client's share link without requiring
-// panel login) to installs created before this column existed.
-const hasSubscriptionId = db
-  .prepare("PRAGMA table_info(inbound_clients)")
-  .all()
-  .some((col) => col.name === 'subscription_id');
-
-if (!hasSubscriptionId) {
-  db.exec('ALTER TABLE inbound_clients ADD COLUMN subscription_id TEXT');
-
-  const backfillStmt = db.prepare(
-    'UPDATE inbound_clients SET subscription_id = ? WHERE id = ?'
-  );
-  const rowsNeedingToken = db
-    .prepare('SELECT id FROM inbound_clients WHERE subscription_id IS NULL')
-    .all();
-  for (const row of rowsNeedingToken) {
-    backfillStmt.run(crypto.randomBytes(16).toString('hex'), row.id);
-  }
-}
+// Drop the old separate clients table from earlier versions of this
+// panel (WS transport, multi-client-per-inbound) — clients now live
+// directly on the inbounds row.
+db.exec('DROP TABLE IF EXISTS inbound_clients');
 
 // Small key/value config table for values the panel generates itself
 // (e.g. an auto-generated session secret) rather than getting from an

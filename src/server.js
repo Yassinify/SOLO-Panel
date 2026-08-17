@@ -5,18 +5,16 @@
 'use strict';
 
 const path = require('path');
-const crypto = require('crypto');
 const express = require('express');
 const session = require('express-session');
 const { getOrCreateSessionSecret } = require('./db'); // also initializes SQLite DB and tables on startup
 const { seedAdminFromEnv, verifyLogin, requireAuth } = require('./auth');
 const inbounds = require('./inbounds');
 const manager = require('./xray/manager');
-const { buildClientLink } = require('./xray/links');
-const { attachWsProxy } = require('./xray/proxy');
+const { buildClientLink, labelForInbound } = require('./xray/links');
 const { internalPortForInbound } = require('./xray/config');
 const statsPoller = require('./xray/statsPoller');
-const { formatBytes } = require('./utils');
+const { formatBytes, QR_ICON_SVG } = require('./utils');
 
 seedAdminFromEnv();
 
@@ -58,18 +56,15 @@ app.get('/health', (req, res) => {
 });
 
 // Public subscription endpoint: no auth, meant to be pasted into a
-// client app's "subscribe" URL field. Returns the client's share link
-// base64-encoded (the standard subscription format most VPN client
-// apps expect), or 404 if the token doesn't match any client.
+// client app's "subscribe" URL field. Returns the inbound's client
+// share link base64-encoded (the standard subscription format most
+// VPN client apps expect), or 404 if the token doesn't match.
 app.get('/sub/:subId', (req, res) => {
-  const client = inbounds.getClientBySubscriptionId(req.params.subId);
-  if (!client) return res.status(404).send('Not found');
-
-  const inbound = inbounds.getInbound(client.inbound_id);
+  const inbound = inbounds.getInboundBySubscriptionId(req.params.subId);
   if (!inbound) return res.status(404).send('Not found');
 
   const publicHost = req.get('host');
-  const link = buildClientLink({ inbound, client, publicHost });
+  const link = buildClientLink({ inbound, publicHost });
   res.type('text/plain').send(Buffer.from(link).toString('base64'));
 });
 
@@ -100,162 +95,41 @@ app.post('/logout', (req, res) => {
 });
 
 app.get('/', requireAuth, (req, res) => {
-  const rows = inbounds.listInbounds().map((row) => {
-    const clients = inbounds.listClients(row.id);
-    const totalBytes = clients.reduce((sum, c) => sum + c.up_bytes + c.down_bytes, 0);
-    return { ...row, clientCount: clients.length, totalTraffic: formatBytes(totalBytes) };
-  });
+  const publicHost = req.get('host');
+  const rows = inbounds.listInbounds().map((row) => ({
+    ...row,
+    label: labelForInbound(row),
+    internalPort: internalPortForInbound(row.id),
+    link: buildClientLink({ inbound: row, publicHost }),
+    subLink: `${req.protocol}://${publicHost}/sub/${row.subscription_id}`,
+    totalTraffic: formatBytes(row.up_bytes + row.down_bytes),
+  }));
   res.render('dashboard', {
     username: req.session.username,
     inbounds: rows,
-    xrayRunning: manager.isRunning(),
-  });
-});
-
-app.get('/inbounds/new', requireAuth, (req, res) => {
-  res.render('inbound_new', {
-    username: req.session.username,
-    error: null,
-    randomPath: crypto.randomBytes(6).toString('hex'),
-  });
-});
-
-app.post('/inbounds', requireAuth, async (req, res) => {
-  const { remark, protocol, listenPath, transport } = req.body;
-  const isTcp = transport === 'tcp';
-
-  if (!remark || !protocol) {
-    return res.render('inbound_new', {
-      username: req.session.username,
-      error: 'Remark and protocol are required.',
-      randomPath: crypto.randomBytes(6).toString('hex'),
-    });
-  }
-  if (!isTcp && (!listenPath || !listenPath.startsWith('/'))) {
-    return res.render('inbound_new', {
-      username: req.session.username,
-      error: 'A WebSocket path starting with "/" is required.',
-      randomPath: crypto.randomBytes(6).toString('hex'),
-    });
-  }
-  // Two ws inbounds sharing a path would silently collide in
-  // xray/proxy.js's routing (`.find()` picks whichever was created
-  // first), sending the second inbound's clients to the wrong
-  // xray-core inbound. Reject the duplicate up front instead.
-  if (!isTcp && inbounds.listInbounds().some((row) => row.listen_path === listenPath)) {
-    return res.render('inbound_new', {
-      username: req.session.username,
-      error: `Path "${listenPath}" is already used by another inbound. Choose a different path.`,
-      randomPath: crypto.randomBytes(6).toString('hex'),
-    });
-  }
-
-  // Railway terminates TLS at its edge for the HTTP domain, so a 'ws'
-  // inbound's xray-core side sees plain WebSocket traffic (see
-  // docs/how-program-work.md). A 'tcp' inbound is raw TCP reached via
-  // a manually-configured Railway TCP Proxy — no Railway-side TLS
-  // termination there, so it is plaintext at the transport level.
-  const streamSettings = isTcp
-    ? { network: 'tcp', security: 'none' }
-    : { network: 'ws', security: 'none', wsSettings: { path: listenPath } };
-
-  inbounds.createInbound({
-    remark,
-    protocol,
-    listenPath: isTcp ? null : listenPath,
-    streamSettings,
-    transport: isTcp ? 'tcp' : 'ws',
-  });
-  await inbounds.reloadXray();
-  res.redirect('/');
-});
-
-app.post('/inbounds/:id/toggle', requireAuth, async (req, res) => {
-  const inbound = inbounds.getInbound(req.params.id);
-  if (inbound) {
-    inbounds.setInboundEnabled(inbound.id, !inbound.enabled);
-    await inbounds.reloadXray();
-  }
-  res.redirect('/');
-});
-
-app.post('/inbounds/:id/delete', requireAuth, async (req, res) => {
-  inbounds.deleteInbound(req.params.id);
-  await inbounds.reloadXray();
-  res.redirect('/');
-});
-
-app.get('/inbounds/:id', requireAuth, (req, res) => {
-  const inbound = inbounds.getInbound(req.params.id);
-  if (!inbound) return res.redirect('/');
-
-  const clients = inbounds.listClients(inbound.id);
-  const publicHost = req.get('host');
-  const links = {};
-  const subLinks = {};
-  clients.forEach((client) => {
-    links[client.id] = buildClientLink({ inbound, client, publicHost });
-    subLinks[client.id] = `${req.protocol}://${publicHost}/sub/${client.subscription_id}`;
-  });
-
-  res.render('inbound_detail', {
-    username: req.session.username,
-    inbound,
-    clients,
-    links,
-    subLinks,
+    qrIconSvg: QR_ICON_SVG,
     formatBytes,
-    internalPort: internalPortForInbound(inbound.id),
   });
 });
 
-// Saves the Railway-assigned external host/port for a 'tcp' transport
-// inbound, once the admin has manually set up a Railway TCP Proxy
-// pointing at this inbound's internal port (shown on the detail page).
+// Saves the Railway-assigned external host/port for this inbound's
+// Railway TCP Proxy, once the admin has manually set that up pointing
+// at this inbound's internal port.
 app.post('/inbounds/:id/external', requireAuth, (req, res) => {
   const { externalHost, externalPort } = req.body;
   if (externalHost && externalPort) {
     inbounds.setInboundExternalAddress(req.params.id, externalHost, Number(externalPort));
   }
-  res.redirect(`/inbounds/${req.params.id}`);
-});
-
-app.post('/inbounds/:id/clients', requireAuth, async (req, res) => {
-  const { email } = req.body;
-  if (email) {
-    inbounds.addClient(req.params.id, { email });
-    await inbounds.reloadXray();
-  }
-  res.redirect(`/inbounds/${req.params.id}`);
-});
-
-app.post('/inbounds/:id/clients/:clientId/toggle', requireAuth, async (req, res) => {
-  const client = inbounds
-    .listClients(req.params.id)
-    .find((c) => String(c.id) === req.params.clientId);
-  if (client) {
-    inbounds.setClientEnabled(client.id, !client.enabled);
-    await inbounds.reloadXray();
-  }
-  res.redirect(`/inbounds/${req.params.id}`);
-});
-
-app.post('/inbounds/:id/clients/:clientId/delete', requireAuth, async (req, res) => {
-  inbounds.deleteClient(req.params.clientId);
-  await inbounds.reloadXray();
-  res.redirect(`/inbounds/${req.params.id}`);
+  res.redirect('/');
 });
 
 const server = app.listen(PORT, HOST, () => {
   console.log(`SOLO Panel listening on http://${HOST}:${PORT}`);
 });
 
-// Proxies WebSocket upgrade requests whose path matches an enabled
-// inbound's listen_path to that inbound's internal xray-core port,
-// so panel UI and proxy traffic share Railway's one public port.
-attachWsProxy(server);
-
-// Start xray-core with whatever inbounds are already in the DB.
+// Seed the fixed set of auto-generated inbounds (no-op after first
+// boot), then start xray-core with them.
+inbounds.ensureGeneratedInbounds();
 inbounds.reloadXray().catch((err) => {
   console.error('Failed to start xray-core on boot:', err.message);
 });

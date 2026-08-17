@@ -13,8 +13,8 @@ const POLL_INTERVAL_MS = 10000;
 let timer = null;
 
 async function pollOnce() {
-  // Skip silently if xray-core isn't running (e.g. zero enabled
-  // inbounds) — queryStats() would just fail to connect anyway.
+  // Skip silently if xray-core isn't running — queryStats() would
+  // just fail to connect anyway.
   if (!manager.isRunning()) return;
 
   let raw;

@@ -1,9 +1,10 @@
-// Builds an Xray-core JSON config from `inbounds` / `inbound_clients`
-// DB rows. Pure functions only — no DB access, no process spawning.
-// See docs/how-program-work.md for the single-port-sharing design:
-// each inbound listens on 127.0.0.1:(10000 + inbound.id), never
-// exposed directly; a future proxy layer forwards matching WS paths
-// from the public Railway port to these internal ports.
+// Builds an Xray-core JSON config from `inbounds` DB rows. Every
+// inbound is VLESS + REALITY (see docs/how-program-work.md): xray
+// binds 0.0.0.0 on an internal port that the admin points a Railway
+// TCP Proxy at, and REALITY handles TLS itself by borrowing a real
+// site's certificate identity — no Railway-side TLS termination and
+// no certificate of our own needed.
+// Pure functions only — no DB access, no process spawning.
 'use strict';
 
 const INTERNAL_PORT_BASE = 10000;
@@ -17,71 +18,55 @@ function internalPortForInbound(inboundId) {
   return INTERNAL_PORT_BASE + inboundId;
 }
 
-/**
- * Map enabled client rows into the protocol-specific client entry
- * shape Xray expects under inbound.settings.clients.
- */
-function buildClientEntries(protocol, clientRows) {
-  const enabledClients = clientRows.filter((c) => c.enabled);
+function statsTagForClient(inboundId) {
+  return `client-${inboundId}`;
+}
 
-  // The `email` field sent to Xray is only used internally as the
-  // Stats API grouping key (see src/xray/stats.js) — it is never shown
-  // to end users. We use the DB row id rather than the human-entered
-  // `email` column so it's guaranteed unique across all inbounds/
-  // clients even if two clients share a display email.
-  switch (protocol) {
-    case 'vless':
-    case 'vmess':
-      return enabledClients.map((c) => ({
-        id: c.client_uuid,
-        email: statsTagForClient(c.id),
-      }));
-    case 'trojan':
-      return enabledClients.map((c) => ({
-        password: c.client_uuid,
-        email: statsTagForClient(c.id),
-      }));
-    case 'shadowsocks':
-      return enabledClients.map((c) => ({
-        method: 'chacha20-ietf-poly1305',
-        password: c.client_uuid,
-        email: statsTagForClient(c.id),
-      }));
-    default:
-      throw new Error(`Unsupported protocol: ${protocol}`);
+/**
+ * Build a single Xray inbound object from one `inbounds` row. Binds
+ * 0.0.0.0 so Railway's TCP Proxy (a separate, manually-configured
+ * feature — see docs/how-program-work.md) can reach it directly on
+ * this internal port.
+ */
+function buildInbound(inboundRow) {
+  const alpn = inboundRow.alpn.split(',').map((s) => s.trim()).filter(Boolean);
+
+  const streamSettings = {
+    network: inboundRow.transport, // 'tcp' or 'grpc'
+    security: 'reality',
+    realitySettings: {
+      show: false,
+      dest: inboundRow.reality_dest,
+      xver: 0,
+      serverNames: [inboundRow.reality_server_name],
+      privateKey: inboundRow.reality_private_key,
+      shortIds: [inboundRow.reality_short_id],
+      alpn,
+    },
+  };
+  if (inboundRow.transport === 'grpc') {
+    streamSettings.grpcSettings = { serviceName: inboundRow.grpc_service_name };
+  } else if (inboundRow.transport === 'xhttp') {
+    // 'auto' lets Xray pick GET (stream-down) vs POST (stream-up)
+    // per-request; the broadest-compatibility mode for XHTTP+REALITY.
+    streamSettings.xhttpSettings = { path: inboundRow.xhttp_path, mode: 'auto' };
   }
-}
 
-function statsTagForClient(clientId) {
-  return `client-${clientId}`;
-}
-
-/**
- * Build a single Xray inbound object from one `inbounds` row and its
- * related `inbound_clients` rows.
- *
- * Transport determines the bind address:
- * - 'ws' (default): loopback-only (127.0.0.1). Never reachable
- *   directly; the WS proxy in xray/proxy.js forwards matching paths
- *   from Railway's single public HTTP port to this internal port.
- * - 'tcp': binds 0.0.0.0 so Railway's TCP Proxy (a separate,
- *   manually-configured feature — see docs/how-program-work.md) can
- *   reach it directly on this internal port.
- */
-function buildInbound(inboundRow, clientRows) {
-  const streamSettings = JSON.parse(inboundRow.config_json);
-
-  const settings = { clients: buildClientEntries(inboundRow.protocol, clientRows) };
-  if (inboundRow.protocol === 'vless') {
-    settings.decryption = 'none';
+  const client = {
+    id: inboundRow.client_uuid,
+    email: statsTagForClient(inboundRow.id),
+  };
+  // XTLS Vision flow only applies to raw tcp, not grpc/xhttp.
+  if (inboundRow.transport === 'tcp') {
+    client.flow = 'xtls-rprx-vision';
   }
 
   return {
     tag: `inbound-${inboundRow.id}`,
-    listen: inboundRow.transport === 'tcp' ? '0.0.0.0' : '127.0.0.1',
+    listen: '0.0.0.0',
     port: internalPortForInbound(inboundRow.id),
-    protocol: inboundRow.protocol,
-    settings,
+    protocol: 'vless',
+    settings: { clients: [client], decryption: 'none' },
     streamSettings,
   };
 }
@@ -89,9 +74,8 @@ function buildInbound(inboundRow, clientRows) {
 /**
  * Build the full Xray config object.
  * @param {Array} inboundRows - rows from the `inbounds` table (enabled ones only, caller filters).
- * @param {Map<number, Array>} clientsByInboundId - inbound_id -> array of inbound_clients rows.
  */
-function buildXrayConfig(inboundRows, clientsByInboundId) {
+function buildXrayConfig(inboundRows) {
   return {
     log: { loglevel: 'warning' },
     // Stats API: exposes per-client/per-inbound traffic counters over
@@ -115,9 +99,7 @@ function buildXrayConfig(inboundRows, clientsByInboundId) {
         protocol: 'dokodemo-door',
         settings: { address: '127.0.0.1' },
       },
-      ...inboundRows.map((row) =>
-        buildInbound(row, clientsByInboundId.get(row.id) || [])
-      ),
+      ...inboundRows.map((row) => buildInbound(row)),
     ],
     routing: {
       rules: [{ type: 'field', inboundTag: ['api'], outboundTag: 'api' }],
