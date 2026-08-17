@@ -28,6 +28,7 @@ body {
   font-family: var(--font-body);
   font-size: 15px;
   line-height: 1.5;
+  overflow-x: hidden;
 }
 
 a { color: var(--accent); text-decoration: none; }
@@ -40,6 +41,8 @@ a:hover { text-decoration: underline; }
   padding: 16px 28px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .brand {
@@ -72,6 +75,8 @@ h2 { font-size: 19px; }
   align-items: center;
   justify-content: space-between;
   margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .card {
@@ -162,6 +167,81 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   padding: 8px 10px;
   margin-top: 6px;
 }
-.link-box code { flex: 1; overflow-x: auto; white-space: nowrap; font-family: var(--font-mono); font-size: 12px; color: var(--text); }
+.link-box code {
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+  word-break: break-all;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+}
+.link-box { align-items: flex-start; }
+.link-box .btn-small { flex-shrink: 0; }
 
 .empty-state { text-align: center; padding: 48px 24px; color: var(--text-muted); }
+
+/* QR code modal */
+.modal-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 7, 13, 0.72);
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+.modal-backdrop.open { display: flex; }
+.modal-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  width: 100%;
+  max-width: 320px;
+  text-align: center;
+}
+.modal-box h3 { margin-bottom: 4px; }
+.modal-qr {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 16px 0;
+}
+.modal-qr canvas, .modal-qr img { display: block; }
+.modal-actions { display: flex; justify-content: center; gap: 10px; margin-top: 8px; }
+
+/* Responsive: narrow viewports (phones) */
+@media (max-width: 640px) {
+  .container { padding: 20px 14px 48px; }
+  .topbar { padding: 14px 16px; }
+  h1 { font-size: 22px; }
+
+  table, thead, tbody, th, tr, td { display: block; }
+  thead { display: none; }
+  tbody tr {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin-bottom: 14px;
+    padding: 10px 4px;
+  }
+  tbody td {
+    border-bottom: none;
+    padding: 6px 10px;
+  }
+  tbody td::before {
+    content: attr(data-label);
+    display: block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--text-muted);
+    margin-bottom: 4px;
+  }
+
+  .page-header { flex-direction: column; align-items: flex-start; }
+}

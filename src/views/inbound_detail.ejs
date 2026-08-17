@@ -1,4 +1,5 @@
 <%- include('partials/header', { title: inbound.remark, username: username }) %>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <div class="container">
   <div class="page-header">
     <div>
@@ -68,20 +69,22 @@
         <% } %>
         <% clients.forEach((client) => { %>
           <tr>
-            <td><span class="status-dot <%= client.enabled ? 'on' : '' %>"></span></td>
-            <td><%= client.email %></td>
-            <td class="mono">&uarr;<%= formatBytes(client.up_bytes) %> &darr;<%= formatBytes(client.down_bytes) %></td>
-            <td>
+            <td data-label="Status"><span class="status-dot <%= client.enabled ? 'on' : '' %>"></span></td>
+            <td data-label="Email"><%= client.email %></td>
+            <td data-label="Traffic" class="mono">&uarr;<%= formatBytes(client.up_bytes) %> &darr;<%= formatBytes(client.down_bytes) %></td>
+            <td data-label="Share link">
               <div class="link-box">
                 <code id="link-<%= client.id %>"><%= links[client.id] %></code>
                 <button type="button" class="btn btn-small" onclick="copyLink('link-<%= client.id %>')">Copy</button>
+                <button type="button" class="btn btn-small" onclick="showQr('link-<%= client.id %>')">QR</button>
               </div>
               <div class="link-box" style="margin-top:6px;">
                 <code id="sub-<%= client.id %>" class="muted"><%= subLinks[client.id] %></code>
                 <button type="button" class="btn btn-small" onclick="copyLink('sub-<%= client.id %>')">Copy sub</button>
+                <button type="button" class="btn btn-small" onclick="showQr('sub-<%= client.id %>')">QR</button>
               </div>
             </td>
-            <td style="text-align:right; white-space:nowrap;">
+            <td data-label="Actions" style="text-align:right; white-space:nowrap;">
               <form class="inline" method="POST" action="/inbounds/<%= inbound.id %>/clients/<%= client.id %>/toggle">
                 <button type="submit" class="btn btn-small"><%= client.enabled ? 'Disable' : 'Enable' %></button>
               </form>
@@ -95,10 +98,41 @@
     </table>
   </div>
 </div>
+
+<div class="modal-backdrop" id="qr-modal" onclick="if(event.target===this) closeQr()">
+  <div class="modal-box">
+    <h3>Scan to import</h3>
+    <p class="muted">Open your VPN client app and scan this code.</p>
+    <div class="modal-qr" id="qr-canvas"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn" onclick="closeQr()">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
   function copyLink(elementId) {
     const text = document.getElementById(elementId).textContent;
     navigator.clipboard.writeText(text);
+  }
+
+  let qrInstance = null;
+  function showQr(elementId) {
+    const text = document.getElementById(elementId).textContent;
+    const holder = document.getElementById('qr-canvas');
+    holder.innerHTML = '';
+    qrInstance = new QRCode(holder, {
+      text: text,
+      width: 220,
+      height: 220,
+      colorDark: '#0a0f1a',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M,
+    });
+    document.getElementById('qr-modal').classList.add('open');
+  }
+  function closeQr() {
+    document.getElementById('qr-modal').classList.remove('open');
   }
 </script>
 <%- include('partials/footer') %>
