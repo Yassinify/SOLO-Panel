@@ -9,7 +9,7 @@ const crypto = require('crypto');
 const express = require('express');
 const session = require('express-session');
 const { getOrCreateSessionSecret } = require('./db'); // also initializes SQLite DB and tables on startup
-const { seedAdminFromEnv, verifyLogin, requireAuth, listAdmins, createAdmin, deleteAdmin, countAdmins } = require('./auth');
+const { seedAdminFromEnv, verifyLogin, requireAuth } = require('./auth');
 const inbounds = require('./inbounds');
 const manager = require('./xray/manager');
 const { buildClientLink } = require('./xray/links');
@@ -244,64 +244,6 @@ app.post('/inbounds/:id/clients/:clientId/delete', requireAuth, async (req, res)
   inbounds.deleteClient(req.params.clientId);
   await inbounds.reloadXray();
   res.redirect(`/inbounds/${req.params.id}`);
-});
-
-app.get('/admins', requireAuth, (req, res) => {
-  res.render('admins', {
-    username: req.session.username,
-    admins: listAdmins(),
-    currentAdminId: req.session.adminId,
-    error: null,
-  });
-});
-
-app.post('/admins', requireAuth, (req, res) => {
-  const { username, password } = req.body;
-  if (!username || !password) {
-    return res.render('admins', {
-      username: req.session.username,
-      admins: listAdmins(),
-      currentAdminId: req.session.adminId,
-      error: 'Username and password are required.',
-    });
-  }
-
-  try {
-    createAdmin(username, password);
-  } catch (err) {
-    return res.render('admins', {
-      username: req.session.username,
-      admins: listAdmins(),
-      currentAdminId: req.session.adminId,
-      error: 'That username is already taken.',
-    });
-  }
-  res.redirect('/admins');
-});
-
-app.post('/admins/:id/delete', requireAuth, (req, res) => {
-  const targetId = Number(req.params.id);
-
-  if (targetId === req.session.adminId) {
-    return res.render('admins', {
-      username: req.session.username,
-      admins: listAdmins(),
-      currentAdminId: req.session.adminId,
-      error: "You can't delete your own account while logged in as it.",
-    });
-  }
-
-  if (countAdmins() <= 1) {
-    return res.render('admins', {
-      username: req.session.username,
-      admins: listAdmins(),
-      currentAdminId: req.session.adminId,
-      error: 'At least one admin account must remain.',
-    });
-  }
-
-  deleteAdmin(targetId);
-  res.redirect('/admins');
 });
 
 const server = app.listen(PORT, HOST, () => {

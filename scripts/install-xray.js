@@ -12,6 +12,7 @@
 'use strict';
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const https = require('https');
 const AdmZip = require('adm-zip');
@@ -19,6 +20,13 @@ const AdmZip = require('adm-zip');
 const BIN_DIR = path.join(__dirname, '..', 'bin');
 const ZIP_PATH = path.join(BIN_DIR, 'xray-download.zip');
 const BIN_PATH = path.join(BIN_DIR, 'xray');
+
+// Persistent across Railway/Nixpacks builds (declared as a
+// cacheDirectories entry in nixpacks.toml's install phase) even though
+// `bin/` itself is not -- so a repeat deploy with the same resolved
+// xray-core version copies the binary locally instead of re-downloading
+// it from GitHub every single build.
+const CACHE_DIR = process.env.XRAY_CACHE_DIR || path.join(os.homedir(), '.cache', 'xray-core');
 
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
@@ -92,6 +100,16 @@ async function main() {
   }
 
   const xrayVersion = await resolveXrayVersion();
+  const cachedBinPath = path.join(CACHE_DIR, `xray-${xrayVersion}`);
+
+  if (fs.existsSync(cachedBinPath)) {
+    console.log(`xray-core ${xrayVersion} found in build cache, copying (no download) ...`);
+    fs.copyFileSync(cachedBinPath, BIN_PATH);
+    fs.chmodSync(BIN_PATH, 0o755);
+    console.log(`xray-core ${xrayVersion} installed at ${BIN_PATH}`);
+    return;
+  }
+
   const downloadUrl = `https://github.com/XTLS/Xray-core/releases/download/${xrayVersion}/Xray-linux-64.zip`;
 
   console.log(`Downloading xray-core ${xrayVersion} from ${downloadUrl} ...`);
@@ -102,6 +120,17 @@ async function main() {
   zip.extractEntryTo('xray', BIN_DIR, false, true);
   fs.chmodSync(BIN_PATH, 0o755);
   fs.unlinkSync(ZIP_PATH);
+
+  // Save a copy into the (build-cached) CACHE_DIR so the next build
+  // with the same resolved version can skip the download entirely.
+  try {
+    if (!fs.existsSync(CACHE_DIR)) {
+      fs.mkdirSync(CACHE_DIR, { recursive: true });
+    }
+    fs.copyFileSync(BIN_PATH, cachedBinPath);
+  } catch (err) {
+    console.warn(`Could not write xray-core to build cache (non-fatal): ${err.message}`);
+  }
 
   console.log(`xray-core ${xrayVersion} installed at ${BIN_PATH}`);
 }

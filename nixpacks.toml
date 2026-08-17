@@ -1,2 +1,10 @@
 [phases.setup]
-nixPkgs = ["nodejs_20", "python3", "gcc", "gnumake"]
+nixPkgs = ["nodejs_20"]
+
+# Persist the xray-core download cache across builds (see
+# scripts/install-xray.js) so a redeploy with the same resolved
+# XRAY_VERSION copies the binary locally instead of re-downloading it
+# from GitHub every single build. Cached dirs are stripped from the
+# final image, so this has no effect on what actually ships/runs.
+[phases.install]
+cacheDirectories = ["/root/.cache/xray-core"]

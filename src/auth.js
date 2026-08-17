@@ -12,15 +12,17 @@ const { db } = require('./db');
 const SALT_ROUNDS = 10;
 
 /**
- * On first startup, if no admin user exists yet, create one from
- * ADMIN_USERNAME / ADMIN_PASSWORD env vars (falls back to admin/admin
+ * On first startup, if no admin user exists yet, create the single
+ * admin account. Username is always "admin" (this panel supports
+ * exactly one admin — see server.js, no account-creation route
+ * exists). Password comes from ADMIN_PASSWORD (falls back to "admin"
  * for local dev only — must be changed before real deployment).
  */
 function seedAdminFromEnv() {
   const existing = db.prepare('SELECT id FROM admin_users LIMIT 1').get();
   if (existing) return;
 
-  const username = process.env.ADMIN_USERNAME || 'admin';
+  const username = 'admin';
   const password = process.env.ADMIN_PASSWORD || 'admin';
   const passwordHash = bcrypt.hashSync(password, SALT_ROUNDS);
 
@@ -55,47 +57,8 @@ function requireAuth(req, res, next) {
   return res.redirect('/login');
 }
 
-/**
- * List all admin accounts (id/username/created_at only, never the
- * password hash).
- */
-function listAdmins() {
-  return db
-    .prepare('SELECT id, username, created_at FROM admin_users ORDER BY id')
-    .all();
-}
-
-/**
- * Create a new admin account. Throws if the username is already taken
- * (caller should catch and show a friendly error).
- */
-function createAdmin(username, password) {
-  const passwordHash = bcrypt.hashSync(password, SALT_ROUNDS);
-  const result = db
-    .prepare('INSERT INTO admin_users (username, password_hash) VALUES (?, ?)')
-    .run(username, passwordHash);
-  return result.lastInsertRowid;
-}
-
-/**
- * Delete an admin account by id. Caller is responsible for the
- * "don't delete the last admin" / "don't delete yourself" checks —
- * this function just performs the deletion.
- */
-function deleteAdmin(id) {
-  db.prepare('DELETE FROM admin_users WHERE id = ?').run(id);
-}
-
-function countAdmins() {
-  return db.prepare('SELECT COUNT(*) AS count FROM admin_users').get().count;
-}
-
 module.exports = {
   seedAdminFromEnv,
   verifyLogin,
   requireAuth,
-  listAdmins,
-  createAdmin,
-  deleteAdmin,
-  countAdmins,
 };

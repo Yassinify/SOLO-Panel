@@ -14,7 +14,7 @@ feature.
 
 ## Features
 
-- Session-based admin login, multiple admin accounts supported
+- Session-based admin login (single admin account)
 - Create/enable/disable/delete inbounds (vless, vmess, trojan, shadowsocks)
 - Per-inbound client management with shareable connection links
 - Per-client subscription URLs (`/sub/:token`, base64, importable into client apps)
@@ -56,8 +56,7 @@ secret, and a temporary ./data directory). In your Railway service →
 
 | Variable | Default if unset | Description |
 |---|---|---|
-| `ADMIN_USERNAME` | `admin` | First admin account username. |
-| `ADMIN_PASSWORD` | `admin` | First admin account password. Change this before sharing your panel's URL with anyone. |
+| `ADMIN_PASSWORD` | `admin` | Password for the single admin account (username is always `admin`). Change this before sharing your panel's URL with anyone. |
 | `SESSION_SECRET` | auto-generated | Random string used to sign session cookies. If unset, the panel generates one itself on first boot and stores it in the database — no need to come up with one yourself. |
 | `DATA_DIR` | `./data` | Directory for the SQLite database, generated xray config, and the auto-generated `SESSION_SECRET`. **Set this to your attached Volume's mount path** (step 3), or this data — including your admin account and inbounds — is wiped on every redeploy. |
 | `NODE_ENV` | — | Set to `production` so session cookies are marked secure. Recommended for any public deployment. |
@@ -68,8 +67,8 @@ Railway automatically provides `PORT`; you don't need to set it.
 ### 5. Deploy
 
 Railway deploys automatically once the repo is connected. On first
-boot, the app seeds an admin account from `ADMIN_USERNAME`/
-`ADMIN_PASSWORD` and creates the SQLite schema under `DATA_DIR`.
+boot, the app seeds the single admin account (`admin` /
+`ADMIN_PASSWORD`) and creates the SQLite schema under `DATA_DIR`.
 
 Visit your Railway-assigned domain, log in, and create your first
 inbound.
@@ -107,12 +106,10 @@ Real footguns in how the panel works, not just config typos:
   assigns back into the panel. Until that second step is done, the
   client's share link is a placeholder string, not a working URI —
   don't hand it out yet.
-- **There's no "forgot password" flow.** If the only admin account's
-  password is lost, the only recovery paths are editing
-  `password_hash` directly in the SQLite database, or wiping
+- **There's no "forgot password" flow, and only one admin account
+  exists.** If its password is lost, the only recovery paths are
+  editing `password_hash` directly in the SQLite database, or wiping
   `DATA_DIR` and starting over (losing all inbounds/clients too).
-  Create a second admin account as a backup once logged in
-  (**Admins** page) if this matters to you.
 - **The xray-core binary download can fail silently.**
   `scripts/install-xray.js` runs on every `npm install`/build and
   intentionally exits with code 0 even if the download fails (so a
