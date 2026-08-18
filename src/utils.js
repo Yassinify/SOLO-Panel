@@ -56,6 +56,30 @@ function generateRawHttpPath() {
 const ALPN_VARIANTS = ['http/1.1', 'h2', 'h2,http/1.1'];
 const FINGERPRINTS = ['chrome', 'firefox', 'safari', 'ios', 'android', 'randomized'];
 
+// Country flag for the Railway region this deployment is running in,
+// keyed by the `RAILWAY_REPLICA_REGION` env var's region identifier
+// prefix (Railway sets this automatically per deployment — see
+// https://docs.railway.com/deployments/regions for the current list;
+// more regions may be added later). Matched by prefix since the full
+// identifier can carry a datacenter suffix (e.g. `us-east4-eqdc4a`).
+const REGION_FLAGS = [
+  { prefix: 'us-west', flag: '\u{1F1FA}\u{1F1F8}' }, // US West Metal (California) - US flag
+  { prefix: 'us-east', flag: '\u{1F1FA}\u{1F1F8}' }, // US East Metal (Virginia) - US flag
+  { prefix: 'europe-west', flag: '\u{1F1F3}\u{1F1F1}' }, // EU West Metal (Amsterdam) - NL flag
+  { prefix: 'asia-southeast', flag: '\u{1F1F8}\u{1F1EC}' }, // Southeast Asia Metal (Singapore) - SG flag
+];
+
+/**
+ * Country flag emoji for the Railway region this instance is running
+ * in, or '' if `RAILWAY_REPLICA_REGION` isn't set (e.g. local dev) or
+ * doesn't match a known region.
+ */
+function regionFlag() {
+  const region = process.env.RAILWAY_REPLICA_REGION || '';
+  const match = REGION_FLAGS.find((r) => region.startsWith(r.prefix));
+  return match ? match.flag : '';
+}
+
 module.exports = {
   formatBytes,
   QR_ICON_SVG,
@@ -64,4 +88,5 @@ module.exports = {
   generateRawHttpPath,
   ALPN_VARIANTS,
   FINGERPRINTS,
+  regionFlag,
 };

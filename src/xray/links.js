@@ -10,7 +10,7 @@
 // combination, all pointing at the exact same server/path/identity.
 'use strict';
 
-const { ALPN_VARIANTS, FINGERPRINTS } = require('../utils');
+const { ALPN_VARIANTS, FINGERPRINTS, regionFlag } = require('../utils');
 
 // Railway gives every service one HTTPS domain on the standard port;
 // see docs/how-program-work.md for why other ports were ruled out.
@@ -31,10 +31,16 @@ function labelForInbound(inbound) {
   return `${inbound.protocol.toUpperCase()} / ${inbound.transport.toUpperCase()}`;
 }
 
-// Per-link remark, e.g. "VLESS - 443 - WS - http/1.1 - Chrome".
+// Per-link remark, e.g. "\ud83c\uddfa\ud83c\uddf8 VLESS - WS - http/1.1 - Chrome". Ports are
+// never included — every generated link always uses the fixed
+// EXTERNAL_PORT (443), so it'd be redundant. Prefixed with the
+// deployment's Railway-region country flag when known (see
+// utils.js's regionFlag()).
 function remarkFor(inbound, alpn, fingerprint) {
   const fpLabel = FINGERPRINT_LABELS[fingerprint] || fingerprint;
-  return `${inbound.protocol.toUpperCase()} - ${EXTERNAL_PORT} - ${inbound.transport.toUpperCase()} - ${alpn} - ${fpLabel}`;
+  const flag = regionFlag();
+  const prefix = flag ? `${flag} ` : '';
+  return `${prefix}${inbound.protocol.toUpperCase()} - ${inbound.transport.toUpperCase()} - ${alpn} - ${fpLabel}`;
 }
 
 // Query params shared by vless/trojan (vmess uses its own base64 JSON
@@ -94,7 +100,9 @@ function buildShadowsocksPluginOpts(inbound, host) {
 // so varying them would just produce identical duplicate links.
 function buildShadowsocksLink(inbound, host) {
   const userInfo = Buffer.from(`${inbound.ss_method}:${inbound.ss_password}`).toString('base64');
-  const remark = `${inbound.protocol.toUpperCase()} - ${EXTERNAL_PORT} - ${inbound.transport.toUpperCase()}`;
+  const flag = regionFlag();
+  const prefix = flag ? `${flag} ` : '';
+  const remark = `${prefix}${inbound.protocol.toUpperCase()} - ${inbound.transport.toUpperCase()}`;
   const params = new URLSearchParams({ plugin: buildShadowsocksPluginOpts(inbound, host) });
   return `ss://${userInfo}@${host}:${EXTERNAL_PORT}?${params}#${encodeURIComponent(remark)}`;
 }
