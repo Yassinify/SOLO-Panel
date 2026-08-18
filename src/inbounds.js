@@ -13,15 +13,17 @@ const crypto = require('crypto');
 const { db, getConfigValue, setConfigValue } = require('./db');
 const manager = require('./xray/manager');
 const { buildXrayConfig } = require('./xray/config');
-const { generatePath, generateSsPassword } = require('./utils');
+const { generatePath, generateSsPassword, generateRawHttpPath } = require('./utils');
 
 // Every protocol x transport combination that works over Railway's
-// single HTTPS edge port (raw TCP / gRPC / REALITY excluded — they
-// need their own port, see docs/how-program-work.md). Order here is
-// also seeding order, so it determines inbound ids (and therefore
-// internal ports, see xray/config.js).
+// single HTTPS edge port. `raw` is TCP with HTTP-header obfuscation
+// (looks like a plain HTTP request on the wire, so it demuxes by path
+// the same way xhttp does — see xray/proxy.js); gRPC / REALITY are
+// still excluded, they need their own port (see docs/how-program-work.md).
+// Order here is also seeding order, so it determines inbound ids (and
+// therefore internal ports, see xray/config.js).
 const PROTOCOLS = ['vless', 'vmess', 'trojan', 'shadowsocks'];
-const TRANSPORTS = ['ws', 'xhttp', 'httpupgrade'];
+const TRANSPORTS = ['ws', 'xhttp', 'httpupgrade', 'raw'];
 
 // Fixed AEAD method for every generated Shadowsocks inbound.
 const SS_METHOD = 'chacha20-ietf-poly1305';
@@ -68,7 +70,7 @@ function ensureGeneratedInbounds() {
         insert.run(
           protocol,
           transport,
-          generatePath(),
+          transport === 'raw' ? generateRawHttpPath() : generatePath(),
           creds.client_uuid || null,
           creds.trojan_password || null,
           creds.ss_method || null,

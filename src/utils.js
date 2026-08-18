@@ -36,6 +36,19 @@ function generateSsPassword() {
   return crypto.randomBytes(16).toString('base64');
 }
 
+// Harder-to-guess path for the `raw` transport's HTTP-obfuscation
+// header: base64 of a small JSON blob (junk + protocol/mode markers,
+// matching the shape real clients like v2rayNG/NekoBox expect on the
+// wire) instead of a plain hex string, plus an `?ed=2560` early-data
+// query hint. Longer and less guessable than generatePath()'s bare
+// 12-hex-char path.
+function generateRawHttpPath() {
+  const junk = crypto.randomBytes(9).toString('base64').replace(/[^a-zA-Z0-9]/g, '');
+  const payload = { junk, protocol: 'vl', mode: 'proxyip', panelIPs: [] };
+  const encoded = Buffer.from(JSON.stringify(payload)).toString('base64');
+  return `/${encoded}?ed=2560`;
+}
+
 // ALPN and TLS-fingerprint variants offered per inbound. These are
 // link-only (client-side) values — Railway's edge, not xray, performs
 // the real TLS handshake — so they don't affect server config, only
@@ -48,6 +61,7 @@ module.exports = {
   QR_ICON_SVG,
   generatePath,
   generateSsPassword,
+  generateRawHttpPath,
   ALPN_VARIANTS,
   FINGERPRINTS,
 };

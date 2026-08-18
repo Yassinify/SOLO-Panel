@@ -6,6 +6,7 @@
 
 const path = require('path');
 const http = require('http');
+const net = require('net');
 const express = require('express');
 const session = require('express-session');
 const { getOrCreateSessionSecret } = require('./db'); // also initializes SQLite DB and tables on startup
@@ -29,9 +30,11 @@ function externalHostFor(req) {
 seedAdminFromEnv();
 
 const app = express();
-// Created explicitly (instead of via app.listen) so attachProxy() can
-// hook the 'upgrade' event before the server starts accepting
-// connections — see src/xray/proxy.js.
+// Created explicitly (instead of via app.listen). Doesn't listen
+// directly — see tcpServer below, which accepts every connection
+// first so attachProxy() can sniff `raw`-transport traffic before
+// this server's own HTTP/upgrade parsing ever sees it (see
+// src/xray/proxy.js).
 const server = http.createServer(app);
 
 const PORT = process.env.PORT || 3000;
@@ -47,7 +50,7 @@ app.set('trust proxy', 1);
 // Must run before static/session/routes: forwards XHTTP requests
 // (matched by path) straight to the matching xray-core inbound,
 // bypassing the rest of the panel's middleware chain entirely.
-const xhttpMiddleware = attachProxy(server, inbounds.listInbounds, internalPortForInbound);
+const { xhttpMiddleware, handleConnection } = attachProxy(server, inbounds.listInbounds, internalPortForInbound);
 app.use(xhttpMiddleware);
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -135,7 +138,13 @@ app.get('/', requireAuth, (req, res) => {
   });
 });
 
-server.listen(PORT, HOST, () => {
+// The actual publicly-listening socket. Every accepted connection
+// goes to handleConnection() first (see src/xray/proxy.js), which
+// sniffs for `raw`-transport camouflage traffic at the TCP level and
+// hands anything else to `server` unchanged.
+const tcpServer = net.createServer(handleConnection);
+
+tcpServer.listen(PORT, HOST, () => {
   console.log(`SOLO Panel listening on http://${HOST}:${PORT}`);
 });
 
@@ -154,7 +163,7 @@ async function shutdown() {
   console.log('Shutting down: stopping xray-core...');
   statsPoller.stop();
   await manager.stop();
-  server.close(() => process.exit(0));
+  tcpServer.close(() => process.exit(0));
 }
 
 process.on('SIGTERM', shutdown);
