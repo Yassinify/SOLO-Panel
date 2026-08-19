@@ -187,12 +187,23 @@ app.get('/', requireAuth, (req, res) => {
     health: health[row.id] || { status: 'unknown' },
   }));
   const subLink = `${req.protocol}://${req.get('host')}/sub/${inbounds.getOrCreateGlobalSubscriptionId()}`;
+  // Same active/total/status computation as GET /sub/:subId, so the
+  // admin dashboard's summary card matches what a client sees on the
+  // public Subscription Panel (vision rule 20: lead with a simple
+  // status/count summary, push technical detail into an Advanced
+  // section).
+  const activeCount = rows.filter((r) => r.health.status === 'healthy' || r.health.status === 'degraded').length;
+  const totalCount = rows.length;
+  const systemStatus = activeCount === 0 ? 'unavailable' : activeCount < totalCount ? 'degraded' : 'healthy';
   res.render('dashboard', {
     loggedIn: true,
     csrfToken: getOrCreateCsrfToken(req),
     inbounds: rows,
     externalHost,
     subLink,
+    activeCount,
+    totalCount,
+    systemStatus,
     qrIconSvg: QR_ICON_SVG,
     formatBytes,
   });

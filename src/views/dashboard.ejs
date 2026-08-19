@@ -6,6 +6,12 @@
   </div>
 
   <div class="card">
+    <div class="page-header" style="margin-bottom:14px;">
+      <div>
+        <h2 style="margin-bottom:4px;">System <span class="health-badge health-<%= systemStatus %>"><%= systemStatus %></span></h2>
+        <p class="muted" style="margin:0;"><%= activeCount %> / <%= totalCount %> endpoints active</p>
+      </div>
+    </div>
     <p class="muted" style="margin-top:0;">
       Every combination of protocol, transport, ALPN, and TLS
       fingerprint is auto-generated automatically -- nothing to set up.
@@ -28,31 +34,34 @@
     </div>
   </div>
 
-  <% inbounds.forEach((inbound) => { %>
-      <div class="card">
-        <div class="page-header" style="margin-bottom:14px;">
-          <div>
-            <h2 style="margin-bottom:4px;"><%= inbound.label %> <span class="health-badge health-<%= inbound.health.status %>"><%= inbound.health.status %></span></h2>
-            <p class="muted" style="margin:0;">
-              path=<%= inbound.path %> - internal port <%= inbound.internalPort %> - <%= inbound.links.length %> link variants
-              <% if (inbound.health.latencyMs !== null && inbound.health.latencyMs !== undefined) { %> - <%= inbound.health.latencyMs %>ms<% } %>
-            </p>
-          </div>
-        </div>
-
-        <details>
-          <summary class="muted" style="cursor:pointer;">Show all link variants</summary>
-          <% inbound.links.forEach((link, idx) => { %>
-            <div class="link-box" style="margin-top:10px;">
-              <code id="link-<%= inbound.id %>-<%= idx %>" tabindex="0" role="button" aria-label="Copy link to clipboard" title="Click to copy" onclick="copyLink('link-<%= inbound.id %>-<%= idx %>')"><%= link %></code>
-              <button type="button" class="btn btn-small qr-icon-btn" title="Show QR" aria-label="Show QR code for this link" onclick="showQr('link-<%= inbound.id %>-<%= idx %>')"><%- qrIconSvg %></button>
+  <details class="card">
+    <summary class="muted" style="cursor:pointer; font-weight:600;">Advanced: per-endpoint technical detail (<%= inbounds.length %>)</summary>
+    <% inbounds.forEach((inbound) => { %>
+        <div class="card" style="margin-top:14px;">
+          <div class="page-header" style="margin-bottom:14px;">
+            <div>
+              <h2 style="margin-bottom:4px;"><%= inbound.label %> <span class="health-badge health-<%= inbound.health.status %>"><%= inbound.health.status %></span></h2>
+              <p class="muted" style="margin:0;">
+                path=<%= inbound.path %> - internal port <%= inbound.internalPort %> - <%= inbound.links.length %> link variants
+                <% if (inbound.health.latencyMs !== null && inbound.health.latencyMs !== undefined) { %> - <%= inbound.health.latencyMs %>ms<% } %>
+              </p>
             </div>
-          <% }) %>
-        </details>
+          </div>
 
-        <p class="muted mono" style="margin-top:10px; margin-bottom:0;">&uarr;<%= formatBytes(inbound.up_bytes) %> &darr;<%= formatBytes(inbound.down_bytes) %></p>
-      </div>
-  <% }) %>
+          <details>
+            <summary class="muted" style="cursor:pointer;">Show all link variants</summary>
+            <% inbound.links.forEach((link, idx) => { %>
+              <div class="link-box" style="margin-top:10px;">
+                <code id="link-<%= inbound.id %>-<%= idx %>" tabindex="0" role="button" aria-label="Copy link to clipboard" title="Click to copy" onclick="copyLink('link-<%= inbound.id %>-<%= idx %>')"><%= link %></code>
+                <button type="button" class="btn btn-small qr-icon-btn" title="Show QR" aria-label="Show QR code for this link" onclick="showQr('link-<%= inbound.id %>-<%= idx %>')"><%- qrIconSvg %></button>
+              </div>
+            <% }) %>
+          </details>
+
+          <p class="muted mono" style="margin-top:10px; margin-bottom:0;">&uarr;<%= formatBytes(inbound.up_bytes) %> &darr;<%= formatBytes(inbound.down_bytes) %></p>
+        </div>
+    <% }) %>
+  </details>
 </div>
 
 <div class="modal-backdrop" id="qr-modal" onclick="if(event.target===this) closeQr()">
