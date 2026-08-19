@@ -234,6 +234,25 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
 .modal-qr canvas, .modal-qr img { display: block; }
 .modal-actions { display: flex; justify-content: center; gap: 10px; margin-top: 8px; }
 
+/* Health status badges (docs/product-vision.md rule 10). Small text
+   pill next to each inbound's label on the dashboard. */
+.health-badge {
+  display: inline-block;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  vertical-align: middle;
+}
+.health-healthy { color: var(--accent); border-color: var(--accent); }
+.health-degraded { color: var(--warning); border-color: var(--warning); }
+.health-unavailable { color: var(--danger); border-color: var(--danger); }
+.health-unknown { color: var(--text-muted); }
+
 /* Responsive: narrow viewports (phones) */
 @media (max-width: 640px) {
   .container { padding: 20px 14px 48px; }
@@ -241,4 +260,46 @@ input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1p
   h1 { font-size: 22px; }
 
   .page-header { flex-direction: column; align-items: flex-start; }
+}
+
+/* Accessibility: visible keyboard-focus indicator for elements made
+   focusable via tabindex (copyable code/link elements) and any
+   ARIA button, matching the same accent color already used for
+   mouse-hover/input focus states above. */
+[role="button"] { cursor: pointer; }
+.link-box code:focus-visible,
+[role="button"]:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Technical-details rows on the Subscription Web Panel (endpoint
+   cards' Core/Protocol/Transport/Security/Status breakdown, vision
+   rules 16/31). Flex-based instead of a <table> so it never needs
+   horizontal scroll on a phone -- label and value sit inline on wide
+   screens, and everything (including the explanation) wraps onto its
+   own line as the viewport narrows. */
+.detail-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border);
+}
+.detail-row:last-child { border-bottom: none; }
+.detail-label {
+  flex: 0 0 100px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.detail-value { flex: 1 1 140px; min-width: 0; }
+.detail-explain {
+  flex: 1 1 100%;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 480px) {
+  .detail-label { flex-basis: 100%; }
 }

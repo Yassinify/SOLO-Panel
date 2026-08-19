@@ -41,24 +41,26 @@ db.exec(`
   );
 `);
 
-// Inbounds table: one row per auto-generated Xray-core inbound. The
-// panel seeds exactly one row per (protocol x transport) combination
-// (see `inbounds.js#ensureGeneratedInbounds` and
-// docs/how-program-work.md) — protocol is 'vless'/'vmess'/'trojan'/
-// 'shadowsocks', transport is 'ws'/'xhttp'/'httpupgrade'. All of them
-// run behind Railway's own edge TLS on the single public port (no
-// REALITY, no admin-configured TCP Proxy / host / port anymore — see
-// Change Log). ALPN and TLS fingerprint don't change server-side
-// behavior (Railway's edge does the real TLS handshake, not xray), so
-// they are NOT stored per row — they're generated as link-only
-// variants at share-link build time (see xray/links.js). Credentials
-// are shared across every row of the same protocol, so every
-// generated config is a different front door to the same account.
-// Breaking schema change from the REALITY design: if an `inbounds`
-// table already exists in the old shape (has a `reality_dest` or
-// `fingerprint` column, neither of which the new schema has), drop
-// and recreate it fresh — old inbounds regenerate automatically on
-// next boot. Leaves an already-new-shape table alone.
+// Inbounds table: one row per auto-generated inbound, across BOTH
+// cores (docs/product-vision.md rule 6/9 - multi-core, endpoint
+// diversity). `core` is 'xray' or 'singbox' (see
+// `inbounds.js#ensureGeneratedInbounds` and src/cores/index.js);
+// protocol/transport combinations differ per core (sing-box doesn't
+// generate shadowsocks rows - see src/singbox/config.js's header for
+// why). All of them run behind Railway's own edge TLS on the single
+// public port (no REALITY, no admin-configured TCP Proxy / host /
+// port - see Change Log). ALPN and TLS fingerprint don't change
+// server-side behavior (Railway's edge does the real TLS handshake,
+// not the core), so they are NOT stored per row - they're generated
+// as link-only variants at share-link build time (see xray/links.js).
+// Credentials are shared across every row of the same (core x
+// protocol), so every generated config is a different front door to
+// the same account.
+// Breaking schema change note: if an `inbounds` table already exists
+// without a `core` column (pre-multi-core shape), or in an even older
+// shape (REALITY-era columns), drop and recreate it fresh - old
+// inbounds regenerate automatically on next boot. Leaves an
+// already-current-shape table alone.
 const existingInboundColumns = db
   .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='inbounds'")
   .get()
@@ -68,13 +70,15 @@ if (
   existingInboundColumns.includes('remark') ||
   existingInboundColumns.includes('external_host') ||
   existingInboundColumns.includes('reality_dest') ||
-  existingInboundColumns.includes('fingerprint')
+  existingInboundColumns.includes('fingerprint') ||
+  (existingInboundColumns.length > 0 && !existingInboundColumns.includes('core'))
 ) {
   db.exec('DROP TABLE inbounds');
 }
 db.exec(`
   CREATE TABLE IF NOT EXISTS inbounds (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    core TEXT NOT NULL DEFAULT 'xray',
     protocol TEXT NOT NULL,
     transport TEXT NOT NULL,
     path TEXT NOT NULL,

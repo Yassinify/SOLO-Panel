@@ -12,12 +12,15 @@ const session = require('express-session');
 const { getOrCreateSessionSecret } = require('./db'); // also initializes SQLite DB and tables on startup
 const { seedAdminFromEnv, verifyLogin, requireAuth, getOrCreateCsrfToken, requireCsrf } = require('./auth');
 const inbounds = require('./inbounds');
-const manager = require('./xray/manager');
+const { listCores } = require('./cores');
+const { orderInbounds } = require('./priority');
 const { buildAllClientLinks, buildLinksForInbound, labelForInbound } = require('./xray/links');
-const { internalPortForInbound } = require('./xray/config');
+const { internalPortForRow } = require('./cores/ports');
 const { attachProxy } = require('./xray/proxy');
 const statsPoller = require('./xray/statsPoller');
-const { formatBytes, QR_ICON_SVG } = require('./utils');
+const healthMonitor = require('./healthMonitor');
+const { getAllHealth } = require('./health');
+const { formatBytes, QR_ICON_SVG, regionFlag, regionName, explainField } = require('./utils');
 
 // The public host clients connect to. Railway sets RAILWAY_PUBLIC_DOMAIN
 // automatically for the service's HTTPS domain; falling back to the
@@ -48,9 +51,10 @@ app.set('views', `${__dirname}/views`);
 app.set('trust proxy', 1);
 
 // Must run before static/session/routes: forwards XHTTP requests
-// (matched by path) straight to the matching xray-core inbound,
-// bypassing the rest of the panel's middleware chain entirely.
-const { xhttpMiddleware, handleConnection } = attachProxy(server, inbounds.listInbounds, internalPortForInbound);
+// (matched by path) straight to the matching inbound's internal core
+// process (xray or sing-box, via internalPortForRow), bypassing the
+// rest of the panel's middleware chain entirely.
+const { xhttpMiddleware, handleConnection } = attachProxy(server, inbounds.listInbounds, internalPortForRow);
 app.use(xhttpMiddleware);
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -78,18 +82,72 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Public subscription endpoint: no auth, meant to be pasted into a
-// client app's "subscribe" URL field. Returns every configured
-// inbound's client share link, one per line, base64-encoded as a
-// whole (the standard multi-server subscription format), or 404 if
-// the token doesn't match.
-app.get('/sub/:subId', (req, res) => {
+// Public subscription endpoint (raw feed): no auth, meant to be
+// pasted into a client app's "subscribe" URL field. Returns every
+// configured inbound's client share link, one per line, base64-
+// encoded as a whole (the standard multi-server subscription
+// format), or 404 if the token doesn't match. Kept at a separate path
+// from the browser-facing panel below (vision rule 18: "the Web Panel
+// must not break compatibility with subscription clients").
+app.get('/sub/:subId/raw', (req, res) => {
   if (req.params.subId !== inbounds.getOrCreateGlobalSubscriptionId()) {
     return res.status(404).send('Not found');
   }
 
-  const links = buildAllClientLinks(inbounds.listInbounds(), externalHostFor(req));
+  const links = buildAllClientLinks(orderInbounds(inbounds.listInbounds()), externalHostFor(req));
   res.type('text/plain').send(Buffer.from(links.join('\n')).toString('base64'));
+});
+
+// Public subscription endpoint (browser panel): no auth. This is the
+// URL the user is meant to open directly (vision rules 13/14: "the
+// subscription URL is also a web panel") -- it shows a read-only
+// dashboard with one card per endpoint, a representative link
+// (the first ALPN/fingerprint variant; the rest remain available via
+// the raw feed above), human-friendly technical details, and health
+// status. 404s on a bad token, same as the raw feed.
+app.get('/sub/:subId', (req, res) => {
+  const subId = req.params.subId;
+  if (subId !== inbounds.getOrCreateGlobalSubscriptionId()) {
+    return res.status(404).send('Not found');
+  }
+
+  const externalHost = externalHostFor(req);
+  const health = getAllHealth();
+  const orderedRows = orderInbounds(inbounds.listInbounds());
+  const endpoints = orderedRows.map((row) => {
+    const links = buildLinksForInbound({ inbound: row, externalHost });
+    return {
+      id: row.id,
+      label: labelForInbound(row),
+      core: row.core,
+      protocol: row.protocol,
+      transport: row.transport,
+      link: links[0] || null,
+      variantCount: links.length,
+      health: health[row.id] || { status: 'unknown' },
+    };
+  });
+  const activeCount = endpoints.filter((e) => e.health.status === 'healthy' || e.health.status === 'degraded').length;
+  // Overall system status shown at the top of the panel: unavailable
+  // if nothing at all is reachable, degraded if some but not all
+  // endpoints are, operational if every endpoint is healthy/degraded
+  // (i.e. reachable). Reuses the same health-status vocabulary as
+  // individual endpoints (src/health.js) via the existing
+  // .health-badge/.health-* CSS classes.
+  const systemStatus = activeCount === 0 ? 'unavailable' : activeCount < endpoints.length ? 'degraded' : 'healthy';
+
+  res.render('subscription', {
+    loggedIn: false,
+    subId,
+    rawSubLink: `${req.protocol}://${req.get('host')}/sub/${subId}/raw`,
+    location: `${regionFlag()} ${regionName()}`.trim(),
+    endpoints,
+    activeCount,
+    totalCount: endpoints.length,
+    systemStatus,
+    explainField,
+    qrIconSvg: QR_ICON_SVG,
+  });
 });
 
 app.get('/login', (req, res) => {
@@ -119,12 +177,14 @@ app.post('/logout', requireCsrf, (req, res) => {
 
 app.get('/', requireAuth, (req, res) => {
   const externalHost = externalHostFor(req);
-  const rows = inbounds.listInbounds().map((row) => ({
+  const health = getAllHealth();
+  const rows = orderInbounds(inbounds.listInbounds()).map((row) => ({
     ...row,
     label: labelForInbound(row),
-    internalPort: internalPortForInbound(row.id),
+    internalPort: internalPortForRow(row),
     links: buildLinksForInbound({ inbound: row, externalHost }),
     totalTraffic: formatBytes(row.up_bytes + row.down_bytes),
+    health: health[row.id] || { status: 'unknown' },
   }));
   const subLink = `${req.protocol}://${req.get('host')}/sub/${inbounds.getOrCreateGlobalSubscriptionId()}`;
   res.render('dashboard', {
@@ -149,20 +209,26 @@ tcpServer.listen(PORT, HOST, () => {
 });
 
 // Seed the fixed set of auto-generated inbounds (no-op after first
-// boot), then start xray-core with them.
+// boot), then start every registered core with its own rows (see
+// src/cores/index.js and inbounds.reloadCores()).
 inbounds.ensureGeneratedInbounds();
-inbounds.reloadXray().catch((err) => {
-  console.error('Failed to start xray-core on boot:', err.message);
+inbounds.reloadCores().catch((err) => {
+  console.error('Failed to start cores on boot:', err.message);
 });
 
-// Periodically pull per-client traffic counters from xray-core's Stats
-// API and persist them (see src/xray/statsPoller.js).
+// Periodically pull per-client traffic counters from every core's
+// Stats API and persist them (see src/xray/statsPoller.js).
 statsPoller.start();
 
+// Periodically check every generated endpoint's reachability (see
+// src/healthMonitor.js and docs/product-vision.md rule 10).
+healthMonitor.start();
+
 async function shutdown() {
-  console.log('Shutting down: stopping xray-core...');
+  console.log('Shutting down: stopping all cores...');
   statsPoller.stop();
-  await manager.stop();
+  healthMonitor.stop();
+  await Promise.all(listCores().map((core) => core.stop()));
   tcpServer.close(() => process.exit(0));
 }
 

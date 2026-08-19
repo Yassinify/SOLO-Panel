@@ -10,14 +10,20 @@
       Every combination of protocol, transport, ALPN, and TLS
       fingerprint is auto-generated automatically -- nothing to set up.
       All of them ride Railway's single HTTPS domain (<%= externalHost %>:443).
-      Paste the one link below into your client's subscription field to
-      get every config at once.
+      Open the Subscription Panel link in a browser to see a friendly
+      overview, or paste the Subscription URL into your client app to
+      import every config at once.
     </p>
     <div>
-      <label style="margin-top:0;">Subscription link (all configs)</label>
+      <label style="margin-top:0;">Subscription Panel (open in a browser)</label>
       <div class="link-box">
-        <code id="sub-all" class="muted" title="Click to copy" onclick="copyLink('sub-all')"><%= subLink %></code>
-        <button type="button" class="btn btn-small qr-icon-btn" title="Show QR" onclick="showQr('sub-all')"><%- qrIconSvg %></button>
+        <code id="sub-all" class="muted" tabindex="0" role="button" aria-label="Copy subscription panel link to clipboard" title="Click to copy" onclick="copyLink('sub-all')"><%= subLink %></code>
+        <button type="button" class="btn btn-small qr-icon-btn" title="Show QR" aria-label="Show QR code for subscription panel link" onclick="showQr('sub-all')"><%- qrIconSvg %></button>
+      </div>
+      <label>Subscription URL (paste into client apps)</label>
+      <div class="link-box">
+        <code id="sub-raw" class="muted" tabindex="0" role="button" aria-label="Copy raw subscription URL to clipboard" title="Click to copy" onclick="copyLink('sub-raw')"><%= subLink %>/raw</code>
+        <button type="button" class="btn btn-small qr-icon-btn" title="Show QR" aria-label="Show QR code for raw subscription URL" onclick="showQr('sub-raw')"><%- qrIconSvg %></button>
       </div>
     </div>
   </div>
@@ -26,9 +32,10 @@
       <div class="card">
         <div class="page-header" style="margin-bottom:14px;">
           <div>
-            <h2 style="margin-bottom:4px;"><%= inbound.label %></h2>
+            <h2 style="margin-bottom:4px;"><%= inbound.label %> <span class="health-badge health-<%= inbound.health.status %>"><%= inbound.health.status %></span></h2>
             <p class="muted" style="margin:0;">
               path=<%= inbound.path %> - internal port <%= inbound.internalPort %> - <%= inbound.links.length %> link variants
+              <% if (inbound.health.latencyMs !== null && inbound.health.latencyMs !== undefined) { %> - <%= inbound.health.latencyMs %>ms<% } %>
             </p>
           </div>
         </div>
@@ -37,8 +44,8 @@
           <summary class="muted" style="cursor:pointer;">Show all link variants</summary>
           <% inbound.links.forEach((link, idx) => { %>
             <div class="link-box" style="margin-top:10px;">
-              <code id="link-<%= inbound.id %>-<%= idx %>" title="Click to copy" onclick="copyLink('link-<%= inbound.id %>-<%= idx %>')"><%= link %></code>
-              <button type="button" class="btn btn-small qr-icon-btn" title="Show QR" onclick="showQr('link-<%= inbound.id %>-<%= idx %>')"><%- qrIconSvg %></button>
+              <code id="link-<%= inbound.id %>-<%= idx %>" tabindex="0" role="button" aria-label="Copy link to clipboard" title="Click to copy" onclick="copyLink('link-<%= inbound.id %>-<%= idx %>')"><%= link %></code>
+              <button type="button" class="btn btn-small qr-icon-btn" title="Show QR" aria-label="Show QR code for this link" onclick="showQr('link-<%= inbound.id %>-<%= idx %>')"><%- qrIconSvg %></button>
             </div>
           <% }) %>
         </details>
@@ -59,7 +66,7 @@
   </div>
 </div>
 
-<div class="toast" id="copy-toast">Copied to clipboard</div>
+<div class="toast" id="copy-toast" role="status" aria-live="polite">Copied to clipboard</div>
 <script>
   function copyLink(elementId) {
     const text = document.getElementById(elementId).textContent;
@@ -70,6 +77,16 @@
       window._toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 1800);
     });
   }
+
+  // Keyboard support for elements made focusable via role="button"
+  // (the copyable code/link boxes above) -- Enter/Space triggers the
+  // same click handler a mouse click would.
+  document.addEventListener('keydown', function (e) {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role="button"]')) {
+      e.preventDefault();
+      e.target.click();
+    }
+  });
 
   let qrInstance = null;
   function showQr(elementId) {

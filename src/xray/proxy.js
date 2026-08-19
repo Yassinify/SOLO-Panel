@@ -39,9 +39,12 @@ const RAW_SNIFF_MAX_BYTES = 8192;
  * @param {() => Array} listInbounds - returns current inbound rows
  *   (called per-connection/request so newly generated inbounds are
  *   picked up without restarting the proxy).
- * @param {(id: number) => number} internalPortForInbound
+ * @param {(row: object) => number} internalPortForRow - core-aware
+ *   port lookup (see src/cores/ports.js); takes the whole inbound row,
+ *   not just its id, since the port range depends on which core (xray
+ *   vs sing-box) actually serves that row.
  */
-function attachProxy(server, listInbounds, internalPortForInbound) {
+function attachProxy(server, listInbounds, internalPortForRow) {
   function findInboundForPath(path) {
     return listInbounds().find((row) => row.path === path && row.transport !== 'xhttp' && row.transport !== 'raw')
       || null;
@@ -74,7 +77,7 @@ function attachProxy(server, listInbounds, internalPortForInbound) {
       return;
     }
 
-    const upstream = net.connect(internalPortForInbound(inbound.id), '127.0.0.1', () => {
+    const upstream = net.connect(internalPortForRow(inbound), '127.0.0.1', () => {
       const rawHeaders = req.rawHeaders
         .reduce((lines, val, i) => {
           if (i % 2 === 0) lines.push(`${val}: ${req.rawHeaders[i + 1]}`);
@@ -101,7 +104,7 @@ function attachProxy(server, listInbounds, internalPortForInbound) {
     const upstreamReq = http.request(
       {
         host: '127.0.0.1',
-        port: internalPortForInbound(inbound.id),
+        port: internalPortForRow(inbound),
         method: req.method,
         path: req.url,
         headers: req.headers,
@@ -148,7 +151,7 @@ function attachProxy(server, listInbounds, internalPortForInbound) {
         return;
       }
 
-      const upstream = net.connect(internalPortForInbound(inbound.id), '127.0.0.1', () => {
+      const upstream = net.connect(internalPortForRow(inbound), '127.0.0.1', () => {
         upstream.write(buffered);
         socket.pipe(upstream);
         upstream.pipe(socket);

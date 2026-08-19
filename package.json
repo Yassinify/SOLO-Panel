@@ -6,7 +6,7 @@
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "postinstall": "node scripts/install-xray.js"
+    "postinstall": "node scripts/install-xray.js && node scripts/install-singbox.js"
   },
   "engines": {
     "node": ">=20"

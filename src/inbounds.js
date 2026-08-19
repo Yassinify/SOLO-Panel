@@ -11,19 +11,31 @@
 
 const crypto = require('crypto');
 const { db, getConfigValue, setConfigValue } = require('./db');
-const manager = require('./xray/manager');
-const { buildXrayConfig } = require('./xray/config');
+const { getCore, listCores } = require('./cores');
 const { generatePath, generateSsPassword, generateRawHttpPath } = require('./utils');
 
-// Every protocol x transport combination that works over Railway's
-// single HTTPS edge port. `raw` is TCP with HTTP-header obfuscation
-// (looks like a plain HTTP request on the wire, so it demuxes by path
-// the same way xhttp does — see xray/proxy.js); gRPC / REALITY are
-// still excluded, they need their own port (see docs/how-program-work.md).
-// Order here is also seeding order, so it determines inbound ids (and
-// therefore internal ports, see xray/config.js).
-const PROTOCOLS = ['vless', 'vmess', 'trojan', 'shadowsocks'];
-const TRANSPORTS = ['ws', 'xhttp', 'httpupgrade', 'raw'];
+// Every (core x protocol x transport) combination this panel
+// generates. `raw`/`xhttp`/shadowsocks are Xray-only (xhttp and raw's
+// HTTP-camouflage sniffing aren't things sing-box implements the same
+// way; shadowsocks has no ws/httpupgrade transport in sing-box at all
+// - see src/singbox/config.js's header). Credentials are generated
+// once per protocol (not per core+transport) and reused across every
+// row of that protocol, so a given protocol is one account with many
+// front doors - xray and sing-box included - not a separate identity
+// per core. Order here is also seeding order, so it determines
+// inbound ids (and therefore each core's own internal ports - see
+// xray/config.js and singbox/config.js, which use different port
+// ranges precisely so ids can overlap safely between cores).
+const CORE_COMBOS = {
+  xray: {
+    protocols: ['vless', 'vmess', 'trojan', 'shadowsocks'],
+    transports: ['ws', 'xhttp', 'httpupgrade', 'raw'],
+  },
+  singbox: {
+    protocols: ['vless', 'vmess', 'trojan'],
+    transports: ['ws', 'httpupgrade'],
+  },
+};
 
 // Fixed AEAD method for every generated Shadowsocks inbound.
 const SS_METHOD = 'chacha20-ietf-poly1305';
@@ -37,16 +49,16 @@ function getInbound(id) {
 }
 
 /**
- * Idempotently seed one inbound row per (protocol x transport) combo.
- * Credentials are generated once per protocol (not per row) and
- * reused across that protocol's 3 transport rows, so every generated
- * config for a given protocol is just a different front door to the
- * same account — not a separate identity. Safe to call on every
- * boot: does nothing once all rows already exist.
+ * Idempotently seed one inbound row per (core x protocol x transport)
+ * combo (see CORE_COMBOS above). Credentials are generated once per
+ * protocol and reused across every core/transport row of that
+ * protocol. Safe to call on every boot: does nothing once all rows
+ * already exist.
  */
 function ensureGeneratedInbounds() {
+  const expectedCount = Object.values(CORE_COMBOS)
+    .reduce((sum, combo) => sum + combo.protocols.length * combo.transports.length, 0);
   const existingCount = db.prepare('SELECT COUNT(*) AS n FROM inbounds').get().n;
-  const expectedCount = PROTOCOLS.length * TRANSPORTS.length;
   if (existingCount >= expectedCount) return;
 
   const credentialsByProtocol = {
@@ -58,25 +70,28 @@ function ensureGeneratedInbounds() {
 
   const insert = db.prepare(
     `INSERT INTO inbounds (
-      protocol, transport, path, client_uuid, trojan_password,
+      core, protocol, transport, path, client_uuid, trojan_password,
       ss_method, ss_password, subscription_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   );
 
   const insertAll = db.transaction(() => {
-    for (const protocol of PROTOCOLS) {
-      const creds = credentialsByProtocol[protocol];
-      for (const transport of TRANSPORTS) {
-        insert.run(
-          protocol,
-          transport,
-          transport === 'raw' ? generateRawHttpPath() : generatePath(),
-          creds.client_uuid || null,
-          creds.trojan_password || null,
-          creds.ss_method || null,
-          creds.ss_password || null,
-          crypto.randomBytes(16).toString('hex')
-        );
+    for (const [core, combo] of Object.entries(CORE_COMBOS)) {
+      for (const protocol of combo.protocols) {
+        const creds = credentialsByProtocol[protocol];
+        for (const transport of combo.transports) {
+          insert.run(
+            core,
+            protocol,
+            transport,
+            transport === 'raw' ? generateRawHttpPath() : generatePath(),
+            creds.client_uuid || null,
+            creds.trojan_password || null,
+            creds.ss_method || null,
+            creds.ss_password || null,
+            crypto.randomBytes(16).toString('hex')
+          );
+        }
       }
     }
   });
@@ -111,17 +126,37 @@ function addClientTraffic(inboundId, uplinkDelta, downlinkDelta) {
 }
 
 /**
- * Rebuild the Xray config from current DB state and (re)start
- * xray-core with it. Called once on boot after seeding. All generated
+ * Rebuild one core's config from current DB state (that core's rows
+ * only — see CORE_COMBOS) and (re)start it. Called for every
+ * registered core on boot (see reloadCores below), and safe to call
+ * for a single core after a future targeted change. All generated
  * inbounds are always active — no per-inbound enabled flag.
+ *
+ * Goes through the generic core abstraction (src/cores) instead of
+ * a specific core module directly — see docs/product-vision.md rule
+ * 6/7.
  */
-async function reloadXray() {
-  const config = buildXrayConfig(listInbounds());
+async function reloadCore(coreName) {
+  const core = getCore(coreName);
+  const rows = listInbounds().filter((row) => row.core === coreName);
 
-  if (manager.isRunning()) {
-    await manager.restart(config);
+  if (core.status() === 'running') {
+    await core.restart(rows);
   } else {
-    manager.start(config);
+    core.start(rows);
+  }
+}
+
+/**
+ * Reload every registered core (see src/cores/index.js), each with
+ * only its own rows. This is what boot (and any future "config
+ * changed" trigger) should call — never call a specific core's
+ * reload directly, or a second core silently never starts (this was
+ * a real bug: see docs/how-program-work.md's sing-box wiring entry).
+ */
+async function reloadCores() {
+  for (const core of listCores()) {
+    await reloadCore(core.name);
   }
 }
 
@@ -131,5 +166,6 @@ module.exports = {
   ensureGeneratedInbounds,
   getOrCreateGlobalSubscriptionId,
   addClientTraffic,
-  reloadXray,
+  reloadCore,
+  reloadCores,
 };

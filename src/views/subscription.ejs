@@ -1,0 +1,140 @@
+<%- include('partials/header', { title: 'Subscription', loggedIn: loggedIn }) %>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<div class="container">
+  <div class="page-header">
+    <div>
+      <h1 style="margin-bottom:4px;">SOLO Subscription Panel</h1>
+      <p class="muted" style="margin:0;">Everything you need to connect, in one place.</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <p class="muted" style="margin:0 0 4px;">Status <span class="health-badge health-<%= systemStatus %>"><%= systemStatus === 'healthy' ? 'Operational' : systemStatus === 'degraded' ? 'Degraded' : 'Unavailable' %></span></p>
+    <% if (location) { %><p class="muted" style="margin:0 0 4px;">Location &nbsp;<%= location %></p><% } %>
+    <p class="muted" style="margin:0;">Endpoints &nbsp;<%= activeCount %> / <%= totalCount %> active</p>
+
+    <label style="margin-top:18px;">Subscription URL (paste into your VPN client app)</label>
+    <div class="link-box">
+      <code id="sub-raw" tabindex="0" role="button" aria-label="Copy subscription URL to clipboard" title="Click to copy" onclick="copyLink('sub-raw')"><%= rawSubLink %></code>
+      <button type="button" class="btn btn-small qr-icon-btn" title="Show QR" aria-label="Show QR code for subscription URL" onclick="showQr('sub-raw')"><%- qrIconSvg %></button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2 style="margin-bottom:6px;">Available Links</h2>
+    <p class="muted" style="margin-top:0;">
+      Each card below is a different way to connect. They all lead to
+      the same place -- having several improves reliability if network
+      conditions change. Tap a card to see the technical details.
+    </p>
+
+    <% endpoints.forEach((ep) => { %>
+      <details style="margin-top:14px; border:1px solid var(--border); border-radius:var(--radius); padding:14px;">
+        <summary style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+          <span><strong><%= ep.label %></strong></span>
+          <span class="health-badge health-<%= ep.health.status %>"><%= ep.health.status %></span>
+        </summary>
+
+        <% if (ep.link) { %>
+          <div class="link-box" style="margin-top:12px;">
+            <code id="link-<%= ep.id %>" tabindex="0" role="button" aria-label="Copy link to clipboard" title="Click to copy" onclick="copyLink('link-<%= ep.id %>')"><%= ep.link %></code>
+            <button type="button" class="btn btn-small qr-icon-btn" title="Show QR" aria-label="Show QR code for this link" onclick="showQr('link-<%= ep.id %>')"><%- qrIconSvg %></button>
+          </div>
+        <% } else { %>
+          <p class="muted" style="margin-top:12px;">Not available yet.</p>
+        <% } %>
+
+        <div style="margin-top:16px;">
+          <div class="detail-row">
+            <div class="detail-label">Core</div>
+            <div class="detail-value"><%= ep.core %></div>
+            <div class="detail-explain"><%= explainField('core') %></div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Protocol</div>
+            <div class="detail-value"><%= ep.protocol %></div>
+            <div class="detail-explain"><%= explainField('protocol') %></div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Transport</div>
+            <div class="detail-value"><%= ep.transport %></div>
+            <div class="detail-explain"><%= explainField('transport') %></div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Security</div>
+            <div class="detail-value">TLS</div>
+            <div class="detail-explain"><%= explainField('security') %></div>
+          </div>
+          <div class="detail-row">
+            <div class="detail-label">Status</div>
+            <div class="detail-value">
+              <%= ep.health.status %><% if (ep.health.latencyMs !== null && ep.health.latencyMs !== undefined) { %> &mdash; <%= ep.health.latencyMs %>ms<% } %>
+            </div>
+            <div class="detail-explain"><%= explainField('status') %></div>
+          </div>
+        </div>
+
+        <% if (ep.variantCount > 1) { %>
+          <p class="muted" style="margin:12px 0 0; font-size:12px;">
+            <%= ep.variantCount %> connection variants available (different ALPN/fingerprint combinations)
+            in the full subscription feed above.
+          </p>
+        <% } %>
+      </details>
+    <% }) %>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="qr-modal" onclick="if(event.target===this) closeQr()">
+  <div class="modal-box">
+    <h3>Scan to import</h3>
+    <p class="muted">Open your VPN client app and scan this code.</p>
+    <div class="modal-qr" id="qr-canvas"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn" onclick="closeQr()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="copy-toast" role="status" aria-live="polite">Copied to clipboard</div>
+<script>
+  function copyLink(elementId) {
+    const text = document.getElementById(elementId).textContent;
+    navigator.clipboard.writeText(text).then(function () {
+      const toast = document.getElementById('copy-toast');
+      toast.classList.add('show');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 1800);
+    });
+  }
+
+  // Keyboard support for elements made focusable via role="button"
+  // (the copyable code/link boxes above) -- Enter/Space triggers the
+  // same click handler a mouse click would.
+  document.addEventListener('keydown', function (e) {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[role="button"]')) {
+      e.preventDefault();
+      e.target.click();
+    }
+  });
+
+  let qrInstance = null;
+  function showQr(elementId) {
+    const text = document.getElementById(elementId).textContent;
+    const holder = document.getElementById('qr-canvas');
+    holder.innerHTML = '';
+    qrInstance = new QRCode(holder, {
+      text: text,
+      width: 220,
+      height: 220,
+      colorDark: '#0a0f1a',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M,
+    });
+    document.getElementById('qr-modal').classList.add('open');
+  }
+  function closeQr() {
+    document.getElementById('qr-modal').classList.remove('open');
+  }
+</script>
+<%- include('partials/footer') %>

@@ -63,10 +63,10 @@ const FINGERPRINTS = ['chrome', 'firefox', 'safari', 'ios', 'android', 'randomiz
 // more regions may be added later). Matched by prefix since the full
 // identifier can carry a datacenter suffix (e.g. `us-east4-eqdc4a`).
 const REGION_FLAGS = [
-  { prefix: 'us-west', flag: '\u{1F1FA}\u{1F1F8}' }, // US West Metal (California) - US flag
-  { prefix: 'us-east', flag: '\u{1F1FA}\u{1F1F8}' }, // US East Metal (Virginia) - US flag
-  { prefix: 'europe-west', flag: '\u{1F1F3}\u{1F1F1}' }, // EU West Metal (Amsterdam) - NL flag
-  { prefix: 'asia-southeast', flag: '\u{1F1F8}\u{1F1EC}' }, // Southeast Asia Metal (Singapore) - SG flag
+  { prefix: 'us-west', flag: '\u{1F1FA}\u{1F1F8}', name: 'United States (West)' }, // US West Metal (California)
+  { prefix: 'us-east', flag: '\u{1F1FA}\u{1F1F8}', name: 'United States (East)' }, // US East Metal (Virginia)
+  { prefix: 'europe-west', flag: '\u{1F1F3}\u{1F1F1}', name: 'Netherlands' }, // EU West Metal (Amsterdam)
+  { prefix: 'asia-southeast', flag: '\u{1F1F8}\u{1F1EC}', name: 'Singapore' }, // Southeast Asia Metal (Singapore)
 ];
 
 /**
@@ -80,6 +80,40 @@ function regionFlag() {
   return match ? match.flag : '';
 }
 
+/**
+ * Human-readable location name for the same region lookup as
+ * `regionFlag()` (vision rule 21: automatic country detection), or
+ * '\ud83c\udf10' (globe, vision rule 21's documented fallback) if the region
+ * can't be determined.
+ */
+function regionName() {
+  const region = process.env.RAILWAY_REPLICA_REGION || '';
+  const match = REGION_FLAGS.find((r) => region.startsWith(r.prefix));
+  return match ? match.name : '\u{1F310}';
+}
+
+// Short, plain-language explanations for technical connection fields
+// (vision rules 16/31): the Subscription Web Panel shows these next to
+// each field instead of expecting users to already know what ALPN,
+// SNI, etc. mean.
+const TECH_EXPLANATIONS = {
+  core: 'The underlying proxy engine that handles this connection.',
+  protocol: 'The proxy protocol this link uses to carry your traffic.',
+  transport: 'How the connection is wrapped so it blends in with normal web traffic.',
+  security: 'Whether the connection is encrypted end-to-end.',
+  tls: 'The encryption layer that protects your traffic in transit, provided by Railway\u2019s network edge.',
+  sni: 'The server name sent during the secure handshake, used to route your connection to the right host.',
+  alpn: 'Used to negotiate which application protocol (e.g. HTTP/2) the secure connection will speak.',
+  fingerprint: 'Makes the connection\u2019s handshake resemble a specific browser, so it looks like ordinary traffic.',
+  location: 'The physical region this deployment is running in.',
+  status: 'Whether this endpoint is currently reachable and responding normally.',
+};
+
+/** Short explanation text for one technical field key, or '' if unknown. */
+function explainField(key) {
+  return TECH_EXPLANATIONS[key] || '';
+}
+
 module.exports = {
   formatBytes,
   QR_ICON_SVG,
@@ -89,4 +123,7 @@ module.exports = {
   ALPN_VARIANTS,
   FINGERPRINTS,
   regionFlag,
+  regionName,
+  TECH_EXPLANATIONS,
+  explainField,
 };
