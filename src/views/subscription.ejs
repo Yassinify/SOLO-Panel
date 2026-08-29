@@ -13,9 +13,10 @@
     <% if (location) { %><p class="muted" style="margin:0 0 4px;">Location &nbsp;<%= location %></p><% } %>
     <p class="muted" style="margin:0;">Endpoints &nbsp;<%= activeCount %> / <%= totalCount %> active</p>
 
-    <label style="margin-top:18px;">Subscription URL (paste into your VPN client app)</label>
+    <label style="margin-top:18px;">Subscription URL</label>
+    <p class="muted" style="margin:0 0 6px;">Paste this into your VPN client app. This same link also opens this page when viewed in a browser.</p>
     <div class="link-box">
-      <code id="sub-raw" tabindex="0" role="button" aria-label="Copy subscription URL to clipboard" title="Click to copy" onclick="copyLink('sub-raw')"><%= rawSubLink %></code>
+      <code id="sub-raw" tabindex="0" role="button" aria-label="Copy subscription URL to clipboard" title="Click to copy" onclick="copyLink('sub-raw')"><%= subLink %></code>
       <button type="button" class="btn btn-small qr-icon-btn" title="Show QR" aria-label="Show QR code for subscription URL" onclick="showQr('sub-raw')"><%- qrIconSvg %></button>
     </div>
   </div>

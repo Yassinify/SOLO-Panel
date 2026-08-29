@@ -13,6 +13,7 @@ const crypto = require('crypto');
 const { db, getConfigValue, setConfigValue } = require('./db');
 const { getCore, listCores } = require('./cores');
 const { generatePath, generateSsPassword, generateRawHttpPath } = require('./utils');
+const { getModeState, isRowEnabled } = require('./modes');
 
 // Every (core x protocol x transport) combination this panel
 // generates. `raw`/`xhttp`/shadowsocks are Xray-only (xhttp and raw's
@@ -129,8 +130,10 @@ function addClientTraffic(inboundId, uplinkDelta, downlinkDelta) {
  * Rebuild one core's config from current DB state (that core's rows
  * only — see CORE_COMBOS) and (re)start it. Called for every
  * registered core on boot (see reloadCores below), and safe to call
- * for a single core after a future targeted change. All generated
- * inbounds are always active — no per-inbound enabled flag.
+ * for a single core after a future targeted change. Every generated
+ * row is served unless its mode (core/protocol/transport) has been
+ * explicitly disabled via src/modes.js — a user-requested exception
+ * to product-vision.md rules 7/20, see docs/how-program-work.md.
  *
  * Goes through the generic core abstraction (src/cores) instead of
  * a specific core module directly — see docs/product-vision.md rule
@@ -138,7 +141,10 @@ function addClientTraffic(inboundId, uplinkDelta, downlinkDelta) {
  */
 async function reloadCore(coreName) {
   const core = getCore(coreName);
-  const rows = listInbounds().filter((row) => row.core === coreName);
+  const modeState = getModeState();
+  const rows = listInbounds().filter(
+    (row) => row.core === coreName && isRowEnabled(row, modeState)
+  );
 
   if (core.status() === 'running') {
     await core.restart(rows);

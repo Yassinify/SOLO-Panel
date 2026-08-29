@@ -12,6 +12,7 @@ const { getCore } = require('./cores');
 const { internalPortForRow } = require('./cores/ports');
 const { recordSuccess, recordFailure } = require('./health');
 const { reportCoreHealth } = require('./recovery');
+const { getModeState, isRowEnabled } = require('./modes');
 
 const POLL_INTERVAL_MS = 15000;
 const CONNECT_TIMEOUT_MS = 3000;
@@ -62,7 +63,15 @@ async function pollOnce() {
     return result.healthy;
   }
 
+  // Skip rows whose mode has been disabled (src/modes.js) -- their
+  // owning core was never asked to listen on that port (see
+  // inbounds.js#reloadCore), so probing it would just record a false
+  // "unavailable" for something the admin deliberately turned off.
+  // Left at 'unknown' in health.js instead.
+  const modeState = getModeState();
   for (const row of inbounds.listInbounds()) {
+    if (!isRowEnabled(row, modeState)) continue;
+
     const coreHealthy = await isCoreHealthy(row.core);
     if (!coreHealthy) {
       recordFailure(row.id);

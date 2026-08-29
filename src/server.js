@@ -21,6 +21,7 @@ const statsPoller = require('./xray/statsPoller');
 const healthMonitor = require('./healthMonitor');
 const { getAllHealth } = require('./health');
 const { formatBytes, QR_ICON_SVG, regionFlag, regionName, explainField } = require('./utils');
+const { MODE_DIMENSIONS, getModeState, setModeState, isRowEnabled, labelForMode } = require('./modes');
 
 // The public host clients connect to. Railway sets RAILWAY_PUBLIC_DOMAIN
 // automatically for the service's HTTPS domain; falling back to the
@@ -28,6 +29,19 @@ const { formatBytes, QR_ICON_SVG, regionFlag, regionName, explainField } = requi
 // admin input needed either way (see docs/how-program-work.md).
 function externalHostFor(req) {
   return process.env.RAILWAY_PUBLIC_DOMAIN || req.get('host');
+}
+
+// Distinguishes a real web browser from a VPN client app fetching the
+// subscription feed, so one URL can serve both (vision rule 18 allows
+// this: "the exact implementation may differ" as long as opening the
+// link in a browser shows the panel). Every mainstream browser's User-
+// Agent starts with "Mozilla/5.0" for historical reasons; proxy client
+// apps (v2rayNG, Shadowrocket, Clash, sing-box, NekoBox, etc.) send
+// their own app name instead, not a Mozilla-style UA. Same technique
+// BPB-Worker-Panel uses (referenced earlier in this project's own
+// Change Log) for the same one-URL-does-both design.
+function isBrowserRequest(req) {
+  return /Mozilla/i.test(req.get('user-agent') || '');
 }
 
 seedAdminFromEnv();
@@ -82,38 +96,31 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Public subscription endpoint (raw feed): no auth, meant to be
-// pasted into a client app's "subscribe" URL field. Returns every
-// configured inbound's client share link, one per line, base64-
-// encoded as a whole (the standard multi-server subscription
-// format), or 404 if the token doesn't match. Kept at a separate path
-// from the browser-facing panel below (vision rule 18: "the Web Panel
-// must not break compatibility with subscription clients").
-app.get('/sub/:subId/raw', (req, res) => {
-  if (req.params.subId !== inbounds.getOrCreateGlobalSubscriptionId()) {
-    return res.status(404).send('Not found');
-  }
-
-  const links = buildAllClientLinks(orderInbounds(inbounds.listInbounds()), externalHostFor(req));
+// Public subscription endpoint. No auth, single URL for everyone --
+// content-negotiated by User-Agent (see isBrowserRequest() above):
+// a real browser gets the HTML Web Panel (vision rules 13/14: "the
+// subscription URL is also a web panel"); a VPN client app fetching
+// it as a subscription gets the raw base64 link feed instead (vision
+// rule 18: must not break compatibility with subscription clients).
+// `/sub/:subId/raw` below still works too, as a explicit-raw alias
+// for any subscription already saved with that exact URL.
+function sendRawSubscription(req, res) {
+  // Rows whose mode (core/protocol/transport) is currently disabled
+  // via src/modes.js are left out of the subscription entirely --
+  // that's the whole point of disabling a mode. See docs/how-program-
+  // work.md for this user-requested exception to vision rules 7/20.
+  const enabledRows = inbounds.listInbounds().filter((row) => isRowEnabled(row));
+  const links = buildAllClientLinks(orderInbounds(enabledRows), externalHostFor(req));
   res.type('text/plain').send(Buffer.from(links.join('\n')).toString('base64'));
-});
+}
 
-// Public subscription endpoint (browser panel): no auth. This is the
-// URL the user is meant to open directly (vision rules 13/14: "the
-// subscription URL is also a web panel") -- it shows a read-only
-// dashboard with one card per endpoint, a representative link
-// (the first ALPN/fingerprint variant; the rest remain available via
-// the raw feed above), human-friendly technical details, and health
-// status. 404s on a bad token, same as the raw feed.
-app.get('/sub/:subId', (req, res) => {
-  const subId = req.params.subId;
-  if (subId !== inbounds.getOrCreateGlobalSubscriptionId()) {
-    return res.status(404).send('Not found');
-  }
-
+function sendSubscriptionPanel(req, res, subId) {
   const externalHost = externalHostFor(req);
   const health = getAllHealth();
-  const orderedRows = orderInbounds(inbounds.listInbounds());
+  // Same mode filtering as the raw feed above -- a disabled mode has
+  // no card here either, not just no link in the raw feed.
+  const enabledRows = inbounds.listInbounds().filter((row) => isRowEnabled(row));
+  const orderedRows = orderInbounds(enabledRows);
   const endpoints = orderedRows.map((row) => {
     const links = buildLinksForInbound({ inbound: row, externalHost });
     return {
@@ -139,7 +146,7 @@ app.get('/sub/:subId', (req, res) => {
   res.render('subscription', {
     loggedIn: false,
     subId,
-    rawSubLink: `${req.protocol}://${req.get('host')}/sub/${subId}/raw`,
+    subLink: `${req.protocol}://${req.get('host')}/sub/${subId}`,
     location: `${regionFlag()} ${regionName()}`.trim(),
     endpoints,
     activeCount,
@@ -148,6 +155,27 @@ app.get('/sub/:subId', (req, res) => {
     explainField,
     qrIconSvg: QR_ICON_SVG,
   });
+}
+
+app.get('/sub/:subId', (req, res) => {
+  const subId = req.params.subId;
+  if (subId !== inbounds.getOrCreateGlobalSubscriptionId()) {
+    return res.status(404).send('Not found');
+  }
+
+  if (isBrowserRequest(req)) {
+    return sendSubscriptionPanel(req, res, subId);
+  }
+  sendRawSubscription(req, res);
+});
+
+// Explicit-raw alias, kept for anyone who already saved this exact
+// URL from before the panel/raw links were merged into one.
+app.get('/sub/:subId/raw', (req, res) => {
+  if (req.params.subId !== inbounds.getOrCreateGlobalSubscriptionId()) {
+    return res.status(404).send('Not found');
+  }
+  sendRawSubscription(req, res);
 });
 
 app.get('/login', (req, res) => {
@@ -178,6 +206,7 @@ app.post('/logout', requireCsrf, (req, res) => {
 app.get('/', requireAuth, (req, res) => {
   const externalHost = externalHostFor(req);
   const health = getAllHealth();
+  const modeState = getModeState();
   const rows = orderInbounds(inbounds.listInbounds()).map((row) => ({
     ...row,
     label: labelForInbound(row),
@@ -185,16 +214,22 @@ app.get('/', requireAuth, (req, res) => {
     links: buildLinksForInbound({ inbound: row, externalHost }),
     totalTraffic: formatBytes(row.up_bytes + row.down_bytes),
     health: health[row.id] || { status: 'unknown' },
+    // Whether this row's mode is currently enabled (src/modes.js) --
+    // shown to the admin so a disabled row's card is visibly marked
+    // rather than silently missing from the Advanced list.
+    enabled: isRowEnabled(row, modeState),
   }));
   const subLink = `${req.protocol}://${req.get('host')}/sub/${inbounds.getOrCreateGlobalSubscriptionId()}`;
   // Same active/total/status computation as GET /sub/:subId, so the
   // admin dashboard's summary card matches what a client sees on the
   // public Subscription Panel (vision rule 20: lead with a simple
   // status/count summary, push technical detail into an Advanced
-  // section).
-  const activeCount = rows.filter((r) => r.health.status === 'healthy' || r.health.status === 'degraded').length;
-  const totalCount = rows.length;
-  const systemStatus = activeCount === 0 ? 'unavailable' : activeCount < totalCount ? 'degraded' : 'healthy';
+  // section). Only enabled rows count -- a disabled mode shouldn't
+  // drag the summary into "degraded".
+  const enabledRows = rows.filter((r) => r.enabled);
+  const activeCount = enabledRows.filter((r) => r.health.status === 'healthy' || r.health.status === 'degraded').length;
+  const totalCount = enabledRows.length;
+  const systemStatus = totalCount === 0 ? 'unavailable' : activeCount < totalCount ? 'degraded' : 'healthy';
   res.render('dashboard', {
     loggedIn: true,
     csrfToken: getOrCreateCsrfToken(req),
@@ -206,7 +241,35 @@ app.get('/', requireAuth, (req, res) => {
     systemStatus,
     qrIconSvg: QR_ICON_SVG,
     formatBytes,
+    modeDimensions: MODE_DIMENSIONS,
+    modeState,
+    labelForMode,
+    modesUpdated: req.query.updated === 'modes',
   });
+});
+
+// Enable/disable individual modes (core / protocol / transport) --
+// a user-requested, explicit exception to product-vision.md rules
+// 7/20 (see docs/how-program-work.md's Change Log and the note added
+// to product-vision.md itself). Order matters here: the new state is
+// persisted and every core is fully reloaded against it BEFORE this
+// handler responds, so the redirect the admin's browser follows always
+// lands on a dashboard that already reflects the change -- no window
+// where the page shows stale core/health state.
+app.post('/settings/modes', requireAuth, requireCsrf, async (req, res) => {
+  const newState = {};
+  for (const [dimension, values] of Object.entries(MODE_DIMENSIONS)) {
+    newState[dimension] = {};
+    for (const value of values) {
+      // Checkboxes only appear in req.body when checked.
+      newState[dimension][value] = req.body[`${dimension}_${value}`] === 'on';
+    }
+  }
+
+  setModeState(newState); // 1. apply the changes
+  await inbounds.reloadCores(); // 2. only then restart the affected cores
+
+  res.redirect('/?updated=modes'); // 3. respond once both are done
 });
 
 // The actual publicly-listening socket. Every accepted connection
