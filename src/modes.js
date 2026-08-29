@@ -5,13 +5,22 @@
 // per-mode enable/disable" note and docs/how-program-work.md's Change
 // Log for context). The panel still auto-generates every combination
 // with zero required setup — this only lets the admin optionally turn
-// specific already-generated modes off. Everything defaults to
-// enabled, so a deployment where the admin never opens this section
-// behaves exactly as before.
+// specific already-generated modes off or on. See the "Default-
+// enabled subset" note below for what's active before the admin ever
+// opens this section.
 //
 // State is persisted in the existing `app_config` key/value table
 // (one row per mode, e.g. `mode_core_xray` -> '1' or '0') rather than
 // a new table, since it's a small fixed set of flags.
+//
+// Default-enabled subset (added 2026-08-29, explicit user request --
+// see the matching note under product-vision.md rule 9): a never-
+// toggled value no longer defaults to enabled across the board.
+// Instead only one representative combination starts on (both cores,
+// VLESS, WebSocket, HTTP/1.1 ALPN, Chrome fingerprint) -- see
+// MODE_DEFAULTS below. Every other combination is still generated and
+// is one click away in the Advanced section; only what's active with
+// zero admin interaction changed.
 'use strict';
 
 const { getConfigValue, setConfigValue } = require('./db');
@@ -30,6 +39,18 @@ const MODE_DIMENSIONS = {
   transport: ['ws', 'xhttp', 'httpupgrade', 'raw'],
   alpn: ALPN_VARIANTS,
   fingerprint: FINGERPRINTS,
+};
+
+// Which value(s) per dimension are enabled the first time this app
+// runs (i.e. before the admin has ever saved a mode change) -- see
+// the module header note above. A value missing from a dimension here
+// defaults to disabled.
+const MODE_DEFAULTS = {
+  core: { xray: true, singbox: true },
+  protocol: { vless: true },
+  transport: { ws: true },
+  alpn: { 'http/1.1': true },
+  fingerprint: { chrome: true },
 };
 
 function configKey(dimension, value) {
@@ -55,8 +76,8 @@ function labelForMode(dimension, value) {
 
 /**
  * Current enabled/disabled state for every mode, grouped by
- * dimension. Missing keys (never toggled before) default to enabled
- * — see module header.
+ * dimension. Missing keys (never toggled before) default per
+ * MODE_DEFAULTS above — see module header.
  */
 function getModeState() {
   const state = {};
@@ -64,7 +85,8 @@ function getModeState() {
     state[dimension] = {};
     for (const value of values) {
       const stored = getConfigValue(configKey(dimension, value));
-      state[dimension][value] = stored === null ? true : stored === '1';
+      const defaultEnabled = !!(MODE_DEFAULTS[dimension] && MODE_DEFAULTS[dimension][value]);
+      state[dimension][value] = stored === null ? defaultEnabled : stored === '1';
     }
   }
   return state;

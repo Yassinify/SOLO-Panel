@@ -123,6 +123,34 @@ h2 { font-size: 19px; }
 .btn-accent:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
 .btn-small { padding: 5px 10px; font-size: 12px; }
 
+/* "Apply Changes" (mode toggles) -- deliberately NOT a solid accent
+   fill like .btn-accent or a selected .mode-toggle chip, since a
+   solid-accent button sitting right under a row of solid-accent chips
+   reads as "just another chip". Outlined instead: accent border/text
+   on a transparent background, filling solid only on hover -- same
+   accent color family, visually distinct shape. */
+.btn-apply {
+  background: transparent;
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
+.btn-apply:hover:not(:disabled) { background: var(--accent); border-color: var(--accent); color: #06231f; }
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.btn:disabled:hover { background: transparent; border-color: var(--border); color: var(--text); }
+.btn-apply:disabled:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Divider between the two subsections of the combined "Advanced:
+   modes & limits" card. */
+.section-divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 24px 0;
+}
+
 /* Full-width primary action buttons (Save Limits, Apply Changes) on
    mobile only -- a full-width tap target is the more standard mobile
    pattern; desktop/tablet keep their normal auto width. */
