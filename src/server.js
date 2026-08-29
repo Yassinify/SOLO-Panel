@@ -21,7 +21,8 @@ const statsPoller = require('./xray/statsPoller');
 const healthMonitor = require('./healthMonitor');
 const { getAllHealth } = require('./health');
 const { formatBytes, QR_ICON_SVG, regionFlag, regionName, explainField } = require('./utils');
-const { MODE_DIMENSIONS, getModeState, setModeState, isRowEnabled, labelForMode } = require('./modes');
+const { MODE_DIMENSIONS, getModeState, setModeState, isRowEnabled, emptyDimensions, labelForMode, getEnabledAlpnValues, getEnabledFingerprints } = require('./modes');
+const { getLimits, setLimits, getUsageSummary } = require('./subscriptionLimits');
 
 // The public host clients connect to. Railway sets RAILWAY_PUBLIC_DOMAIN
 // automatically for the service's HTTPS domain; falling back to the
@@ -110,7 +111,7 @@ function sendRawSubscription(req, res) {
   // that's the whole point of disabling a mode. See docs/how-program-
   // work.md for this user-requested exception to vision rules 7/20.
   const enabledRows = inbounds.listInbounds().filter((row) => isRowEnabled(row));
-  const links = buildAllClientLinks(orderInbounds(enabledRows), externalHostFor(req));
+  const links = buildAllClientLinks(orderInbounds(enabledRows), externalHostFor(req), getEnabledAlpnValues(), getEnabledFingerprints());
   res.type('text/plain').send(Buffer.from(links.join('\n')).toString('base64'));
 }
 
@@ -121,8 +122,10 @@ function sendSubscriptionPanel(req, res, subId) {
   // no card here either, not just no link in the raw feed.
   const enabledRows = inbounds.listInbounds().filter((row) => isRowEnabled(row));
   const orderedRows = orderInbounds(enabledRows);
+  const alpnValues = getEnabledAlpnValues();
+  const fingerprints = getEnabledFingerprints();
   const endpoints = orderedRows.map((row) => {
-    const links = buildLinksForInbound({ inbound: row, externalHost });
+    const links = buildLinksForInbound({ inbound: row, externalHost, alpnValues, fingerprints });
     return {
       id: row.id,
       label: labelForInbound(row),
@@ -143,6 +146,12 @@ function sendSubscriptionPanel(req, res, subId) {
   // .health-badge/.health-* CSS classes.
   const systemStatus = activeCount === 0 ? 'unavailable' : activeCount < endpoints.length ? 'degraded' : 'healthy';
 
+  // Days-left / usage-left display (src/subscriptionLimits.js). Both
+  // are null (rendered as "Unlimited") unless the admin has set a
+  // limit -- see that module's header for the default-unlimited
+  // rationale.
+  const usageSummary = getUsageSummary(inbounds.getTotalTrafficBytes());
+
   res.render('subscription', {
     loggedIn: false,
     subId,
@@ -152,6 +161,8 @@ function sendSubscriptionPanel(req, res, subId) {
     activeCount,
     totalCount: endpoints.length,
     systemStatus,
+    daysLeftText: usageSummary.unlimitedDays ? 'Unlimited' : `${usageSummary.daysLeft} Days`,
+    usageLeftText: usageSummary.unlimitedUsage ? 'Unlimited' : formatBytes(usageSummary.usageLeftBytes),
     explainField,
     qrIconSvg: QR_ICON_SVG,
   });
@@ -210,13 +221,9 @@ app.get('/', requireAuth, (req, res) => {
   const rows = orderInbounds(inbounds.listInbounds()).map((row) => ({
     ...row,
     label: labelForInbound(row),
-    internalPort: internalPortForRow(row),
-    links: buildLinksForInbound({ inbound: row, externalHost }),
-    totalTraffic: formatBytes(row.up_bytes + row.down_bytes),
     health: health[row.id] || { status: 'unknown' },
     // Whether this row's mode is currently enabled (src/modes.js) --
-    // shown to the admin so a disabled row's card is visibly marked
-    // rather than silently missing from the Advanced list.
+    // used below to compute the active/total endpoint summary.
     enabled: isRowEnabled(row, modeState),
   }));
   const subLink = `${req.protocol}://${req.get('host')}/sub/${inbounds.getOrCreateGlobalSubscriptionId()}`;
@@ -230,6 +237,23 @@ app.get('/', requireAuth, (req, res) => {
   const activeCount = enabledRows.filter((r) => r.health.status === 'healthy' || r.health.status === 'degraded').length;
   const totalCount = enabledRows.length;
   const systemStatus = totalCount === 0 ? 'unavailable' : activeCount < totalCount ? 'degraded' : 'healthy';
+
+  // Time/usage limits (src/subscriptionLimits.js): `limits` (raw
+  // admin-set values, or '' for unlimited) pre-fills the settings
+  // form below; `usageSummary` is the same days-left/usage-left the
+  // Subscription Web Panel shows, for the admin's own visibility.
+  const limits = getLimits();
+  const usageSummary = getUsageSummary(inbounds.getTotalTrafficBytes());
+
+  // Persistent-storage warning: DATA_DIR unset means the app fell
+  // back to a path inside the container's own ephemeral filesystem
+  // (see src/db.js), which Railway wipes on every redeploy --
+  // regardless of whether DATA_DIR is actually set to a real
+  // Railway Volume mount path, we can't verify that part from inside
+  // the app, but an unset DATA_DIR is a reliable sign persistent
+  // storage was never configured at all (see README.md step 3).
+  const dataDirWarning = !process.env.DATA_DIR;
+
   res.render('dashboard', {
     loggedIn: true,
     csrfToken: getOrCreateCsrfToken(req),
@@ -245,6 +269,13 @@ app.get('/', requireAuth, (req, res) => {
     modeState,
     labelForMode,
     modesUpdated: req.query.updated === 'modes',
+    modesError: req.query.modesError ? req.query.modesError.split(',') : null,
+    limitDays: limits.days === null ? '' : limits.days,
+    limitUsageGB: limits.usageGB === null ? '' : limits.usageGB,
+    daysLeftText: usageSummary.unlimitedDays ? 'Unlimited' : `${usageSummary.daysLeft} Days`,
+    usageLeftText: usageSummary.unlimitedUsage ? 'Unlimited' : formatBytes(usageSummary.usageLeftBytes),
+    limitsUpdated: req.query.updated === 'limits',
+    dataDirWarning,
   });
 });
 
@@ -266,10 +297,32 @@ app.post('/settings/modes', requireAuth, requireCsrf, async (req, res) => {
     }
   }
 
+  // Reject a submission that would leave any dimension with zero
+  // enabled options (e.g. every Core value turned off) -- the panel
+  // must always have at least one option to generate/serve per
+  // dimension. Nothing is persisted and no core is restarted in this
+  // case; the admin's browser lands back on the dashboard with an
+  // error banner instead.
+  const invalidDimensions = emptyDimensions(newState);
+  if (invalidDimensions.length > 0) {
+    return res.redirect(`/?modesError=${invalidDimensions.join(',')}`);
+  }
+
   setModeState(newState); // 1. apply the changes
   await inbounds.reloadCores(); // 2. only then restart the affected cores
 
   res.redirect('/?updated=modes'); // 3. respond once both are done
+});
+
+// Set the admin-selectable subscription time/usage limits
+// (src/subscriptionLimits.js), per user request. Empty fields mean
+// unlimited (the default) -- see that module's header. Unlike
+// /settings/modes, no core restart is needed here: limits are a
+// display-only figure (days left / usage left), not something that
+// changes what xray-core/sing-box are configured to serve.
+app.post('/settings/limits', requireAuth, requireCsrf, (req, res) => {
+  setLimits({ days: req.body.days, usageGB: req.body.usage_gb });
+  res.redirect('/?updated=limits');
 });
 
 // The actual publicly-listening socket. Every accepted connection

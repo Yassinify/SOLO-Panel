@@ -14,9 +14,9 @@
   --danger: #e5626a;
   --warning: #e8b34a;
   --radius: 8px;
-  --font-display: 'Space Grotesk', system-ui, sans-serif;
-  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --font-display: 'Roboto', system-ui, sans-serif;
+  --font-body: 'Roboto', system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', Menlo, monospace;
 }
 
 * { box-sizing: border-box; }
@@ -114,7 +114,7 @@ h2 { font-size: 19px; }
 form.inline { display: inline; }
 
 label { display: block; font-size: 13px; color: var(--text-muted); margin: 14px 0 6px; }
-input[type=text], input[type=password], select {
+input[type=text], input[type=password], input[type=number], select {
   width: 100%;
   padding: 10px 12px;
   background: var(--bg);

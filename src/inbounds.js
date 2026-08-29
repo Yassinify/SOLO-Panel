@@ -50,6 +50,19 @@ function getInbound(id) {
 }
 
 /**
+ * Total uplink+downlink bytes across every generated inbound row.
+ * Since every row is just a different front door to the same single
+ * installation identity (see product-vision.md rule 19 and this
+ * file's CORE_COMBOS comment), this sum is "how much data this
+ * subscription has used", used by src/subscriptionLimits.js's usage
+ * cap display.
+ */
+function getTotalTrafficBytes() {
+  const row = db.prepare('SELECT COALESCE(SUM(up_bytes + down_bytes), 0) AS total FROM inbounds').get();
+  return row.total;
+}
+
+/**
  * Idempotently seed one inbound row per (core x protocol x transport)
  * combo (see CORE_COMBOS above). Credentials are generated once per
  * protocol and reused across every core/transport row of that
@@ -169,6 +182,7 @@ async function reloadCores() {
 module.exports = {
   listInbounds,
   getInbound,
+  getTotalTrafficBytes,
   ensureGeneratedInbounds,
   getOrCreateGlobalSubscriptionId,
   addClientTraffic,

@@ -15,14 +15,21 @@
 'use strict';
 
 const { getConfigValue, setConfigValue } = require('./db');
+const { ALPN_VARIANTS, FINGERPRINTS } = require('./utils');
 
 // The full set of toggleable values per dimension. Kept in sync by
 // hand with src/inbounds.js's CORE_COMBOS — these are the only
 // core/protocol/transport values the panel ever generates rows for.
+// `alpn`/`fingerprint` are not row attributes (see xray/links.js) —
+// they're link-generation-time fan-out values, so they're toggled the
+// same way but consulted via getEnabledAlpnValues()/
+// getEnabledFingerprints() instead of isRowEnabled().
 const MODE_DIMENSIONS = {
   core: ['xray', 'singbox'],
   protocol: ['vless', 'vmess', 'trojan', 'shadowsocks'],
   transport: ['ws', 'xhttp', 'httpupgrade', 'raw'],
+  alpn: ALPN_VARIANTS,
+  fingerprint: FINGERPRINTS,
 };
 
 function configKey(dimension, value) {
@@ -37,6 +44,8 @@ const MODE_LABELS = {
   core: { xray: 'Xray', singbox: 'sing-box' },
   protocol: { vless: 'VLESS', vmess: 'VMess', trojan: 'Trojan', shadowsocks: 'Shadowsocks' },
   transport: { ws: 'WebSocket', xhttp: 'XHTTP', httpupgrade: 'HTTP Upgrade', raw: 'Raw (camouflaged TCP)' },
+  alpn: { 'http/1.1': 'HTTP/1.1', h2: 'HTTP/2', 'h2,http/1.1': 'HTTP/2 + HTTP/1.1' },
+  fingerprint: { chrome: 'Chrome', firefox: 'Firefox', safari: 'Safari', ios: 'iOS', android: 'Android', randomized: 'Randomized' },
 };
 
 /** Display label for one mode value, or the raw value if unknown. */
@@ -90,4 +99,38 @@ function isRowEnabled(row, state = getModeState()) {
   );
 }
 
-module.exports = { MODE_DIMENSIONS, MODE_LABELS, labelForMode, getModeState, setModeState, isRowEnabled };
+/**
+ * Dimension names in `state` that have zero enabled values. Used to
+ * reject a /settings/modes submission that would leave a whole
+ * dimension with nothing enabled -- e.g. disabling every Core value
+ * would leave the panel with nothing to generate/serve at all for
+ * that dimension. Every dimension must always keep at least one
+ * option on.
+ */
+function emptyDimensions(state) {
+  return Object.keys(MODE_DIMENSIONS).filter(
+    (dimension) => !Object.values(state[dimension]).some(Boolean)
+  );
+}
+
+/**
+ * ALPN values currently enabled, in MODE_DIMENSIONS.alpn's original
+ * order. Used by xray/links.js's link-building fan-out instead of
+ * isRowEnabled() since ALPN isn't a per-row attribute (see that
+ * file's header comment).
+ */
+function getEnabledAlpnValues(state = getModeState()) {
+  return MODE_DIMENSIONS.alpn.filter((value) => !!state.alpn[value]);
+}
+
+/**
+ * TLS fingerprint values currently enabled, in
+ * MODE_DIMENSIONS.fingerprint's original order. Same rationale as
+ * getEnabledAlpnValues() — fingerprint is a link-generation-time
+ * fan-out value, not a per-row attribute.
+ */
+function getEnabledFingerprints(state = getModeState()) {
+  return MODE_DIMENSIONS.fingerprint.filter((value) => !!state.fingerprint[value]);
+}
+
+module.exports = { MODE_DIMENSIONS, MODE_LABELS, labelForMode, getModeState, setModeState, isRowEnabled, emptyDimensions, getEnabledAlpnValues, getEnabledFingerprints };

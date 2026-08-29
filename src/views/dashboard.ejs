@@ -5,9 +5,27 @@
     <h1>Inbounds</h1>
   </div>
 
+  <% if (dataDirWarning) { %>
+    <div class="card" style="border-color: var(--danger);">
+      <p style="margin:0;"><strong>⚠️ Persistent storage isn't configured.</strong> Without a Railway Volume, your admin password, generated links, and settings will be deleted on every redeploy. To fix this: in your Railway service go to <strong>Settings → Volumes</strong>, create a Volume and mount it (e.g. at <code>/app/data</code>), then set the <code>DATA_DIR</code> variable under <strong>Variables</strong> to that same path and redeploy.</p>
+    </div>
+  <% } %>
+
   <% if (modesUpdated) { %>
     <div class="card" style="border-color: var(--accent);">
       <p style="margin:0;"><strong>Mode changes applied.</strong> Please update your subscription in your client app so it picks up the new set of links.</p>
+    </div>
+  <% } %>
+
+  <% if (limitsUpdated) { %>
+    <div class="card" style="border-color: var(--accent);">
+      <p style="margin:0;"><strong>Limits updated.</strong></p>
+    </div>
+  <% } %>
+
+  <% if (modesError) { %>
+    <div class="card" style="border-color: var(--danger);">
+      <p style="margin:0;"><strong>Couldn't apply mode changes.</strong> At least one option must stay enabled in each section (<%= modesError.map((d) => d.charAt(0).toUpperCase() + d.slice(1)).join(', ') %>). No changes were made.</p>
     </div>
   <% } %>
 
@@ -16,6 +34,7 @@
       <div>
         <h2 style="margin-bottom:4px;">System <span class="health-badge health-<%= systemStatus %>"><%= systemStatus %></span></h2>
         <p class="muted" style="margin:0;"><%= activeCount %> / <%= totalCount %> endpoints active</p>
+        <p class="muted" style="margin:4px 0 0;">📅 <%= daysLeftText %>&nbsp;&nbsp;📊 <%= usageLeftText %></p>
       </div>
     </div>
     <p class="muted" style="margin-top:0;">
@@ -36,10 +55,28 @@
   </div>
 
   <details class="card">
-    <summary class="muted" style="cursor:pointer; font-weight:600;">Advanced: modes</summary>
+    <summary class="muted" style="cursor:pointer; font-weight:600;">Time &amp; usage limits</summary>
     <p class="muted" style="margin-top:14px;">
+      Optionally cap this subscription to a number of days and/or a
+      total data amount. Leave a field blank for unlimited (the
+      default). Saving restarts the countdown from now.
+    </p>
+    <form method="POST" action="/settings/limits">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>Days</label>
+      <input type="number" name="days" min="1" step="1" placeholder="Unlimited" value="<%= limitDays %>" style="margin-bottom:12px;">
+      <label>Usage limit (GB)</label>
+      <input type="number" name="usage_gb" min="0.01" step="0.01" placeholder="Unlimited" value="<%= limitUsageGB %>">
+      <button type="submit" class="btn btn-accent" style="margin-top:16px;">Save Limits</button>
+    </form>
+  </details>
+
+  <div class="card">
+    <h2 style="margin-bottom:4px;">Advanced: modes</h2>
+    <p class="muted" style="margin-top:0;">
       Turn individual modes off if you don't want them offered at all.
-      Everything is on by default. Applying changes restarts the
+      Everything is on by default. Each section needs at least one
+      option enabled at all times. Applying changes restarts the
       affected proxy engines, so give it a few seconds, then update
       your subscription in your client app.
     </p>
@@ -50,7 +87,7 @@
         <div class="mode-grid">
           <% values.forEach((value) => { %>
             <label class="mode-toggle">
-              <input type="checkbox" name="<%= dimension %>_<%= value %>" <%= modeState[dimension][value] ? 'checked' : '' %>>
+              <input type="checkbox" name="<%= dimension %>_<%= value %>" data-dimension="<%= dimension %>" <%= modeState[dimension][value] ? 'checked' : '' %>>
               <%= labelForMode(dimension, value) %>
             </label>
           <% }) %>
@@ -58,36 +95,7 @@
       <% }) %>
       <button type="submit" class="btn btn-accent" style="margin-top:16px;">Apply Changes</button>
     </form>
-  </details>
-
-  <details class="card">
-    <summary class="muted" style="cursor:pointer; font-weight:600;">Advanced: per-endpoint technical detail (<%= inbounds.length %>)</summary>
-    <% inbounds.forEach((inbound) => { %>
-        <div class="card" style="margin-top:14px;<% if (!inbound.enabled) { %> opacity: 0.55;<% } %>">
-          <div class="page-header" style="margin-bottom:14px;">
-            <div>
-              <h2 style="margin-bottom:4px;"><%= inbound.label %> <span class="health-badge health-<%= inbound.health.status %>"><%= inbound.health.status %></span><% if (!inbound.enabled) { %> <span class="health-badge">disabled</span><% } %></h2>
-              <p class="muted" style="margin:0;">
-                path=<%= inbound.path %> - internal port <%= inbound.internalPort %> - <%= inbound.links.length %> link variants
-                <% if (inbound.health.latencyMs !== null && inbound.health.latencyMs !== undefined) { %> - <%= inbound.health.latencyMs %>ms<% } %>
-              </p>
-            </div>
-          </div>
-
-          <details>
-            <summary class="muted" style="cursor:pointer;">Show all link variants</summary>
-            <% inbound.links.forEach((link, idx) => { %>
-              <div class="link-box" style="margin-top:10px;">
-                <code id="link-<%= inbound.id %>-<%= idx %>" tabindex="0" role="button" aria-label="Copy link to clipboard" title="Click to copy" onclick="copyLink('link-<%= inbound.id %>-<%= idx %>')"><%= link %></code>
-                <button type="button" class="btn btn-small qr-icon-btn" title="Show QR" aria-label="Show QR code for this link" onclick="showQr('link-<%= inbound.id %>-<%= idx %>')"><%- qrIconSvg %></button>
-              </div>
-            <% }) %>
-          </details>
-
-          <p class="muted mono" style="margin-top:10px; margin-bottom:0;">&uarr;<%= formatBytes(inbound.up_bytes) %> &darr;<%= formatBytes(inbound.down_bytes) %></p>
-        </div>
-    <% }) %>
-  </details>
+  </div>
 </div>
 
 <div class="modal-backdrop" id="qr-modal" onclick="if(event.target===this) closeQr()">
@@ -121,6 +129,23 @@
       e.preventDefault();
       e.target.click();
     }
+  });
+
+  // Mode toggles: block unchecking the last remaining checked option
+  // within a dimension (e.g. Core, Protocol) client-side, mirroring
+  // the server-side check in POST /settings/modes -- a dimension must
+  // always keep at least one option enabled.
+  document.querySelectorAll('.mode-toggle input[type="checkbox"]').forEach(function (checkbox) {
+    checkbox.addEventListener('change', function () {
+      if (this.checked) return;
+      var dimension = this.dataset.dimension;
+      var groupInputs = document.querySelectorAll('input[type="checkbox"][data-dimension="' + dimension + '"]');
+      var anyStillChecked = Array.prototype.some.call(groupInputs, function (input) { return input.checked; });
+      if (!anyStillChecked) {
+        this.checked = true;
+        alert('At least one option must stay enabled in this section.');
+      }
+    });
   });
 
   let qrInstance = null;

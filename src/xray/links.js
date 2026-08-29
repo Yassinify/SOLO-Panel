@@ -137,8 +137,13 @@ function buildOneLink({ inbound, externalHost, alpn, fingerprint }) {
  * Every link variant for one inbound row: one (ALPN x fingerprint)
  * link per combination for vless/trojan/vmess, or a single plugin-
  * based link for shadowsocks (see buildShadowsocksLink).
+ *
+ * `alpnValues`/`fingerprints` default to every variant, but callers
+ * pass the admin's currently-enabled subsets (src/modes.js's
+ * getEnabledAlpnValues()/getEnabledFingerprints()) so a disabled ALPN
+ * or fingerprint mode stops being offered anywhere links get built.
  */
-function buildLinksForInbound({ inbound, externalHost }) {
+function buildLinksForInbound({ inbound, externalHost, alpnValues = ALPN_VARIANTS, fingerprints = FINGERPRINTS }) {
   if (!externalHost) return [];
 
   if (inbound.protocol === 'shadowsocks') {
@@ -146,8 +151,8 @@ function buildLinksForInbound({ inbound, externalHost }) {
   }
 
   const links = [];
-  for (const alpn of ALPN_VARIANTS) {
-    for (const fingerprint of FINGERPRINTS) {
+  for (const alpn of alpnValues) {
+    for (const fingerprint of fingerprints) {
       const link = buildOneLink({ inbound, externalHost, alpn, fingerprint });
       if (link) links.push(link);
     }
@@ -156,8 +161,8 @@ function buildLinksForInbound({ inbound, externalHost }) {
 }
 
 /** Every link variant for every inbound row — the full subscription content. */
-function buildAllClientLinks(inboundRows, externalHost) {
-  return inboundRows.flatMap((inbound) => buildLinksForInbound({ inbound, externalHost }));
+function buildAllClientLinks(inboundRows, externalHost, alpnValues = ALPN_VARIANTS, fingerprints = FINGERPRINTS) {
+  return inboundRows.flatMap((inbound) => buildLinksForInbound({ inbound, externalHost, alpnValues, fingerprints }));
 }
 
 module.exports = { buildAllClientLinks, buildLinksForInbound, labelForInbound, EXTERNAL_PORT };

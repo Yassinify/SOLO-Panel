@@ -11,7 +11,8 @@
   <div class="card">
     <p class="muted" style="margin:0 0 4px;">Status <span class="health-badge health-<%= systemStatus %>"><%= systemStatus === 'healthy' ? 'Operational' : systemStatus === 'degraded' ? 'Degraded' : 'Unavailable' %></span></p>
     <% if (location) { %><p class="muted" style="margin:0 0 4px;">Location &nbsp;<%= location %></p><% } %>
-    <p class="muted" style="margin:0;">Endpoints &nbsp;<%= activeCount %> / <%= totalCount %> active</p>
+    <p class="muted" style="margin:0 0 4px;">Endpoints &nbsp;<%= activeCount %> / <%= totalCount %> active</p>
+    <p class="muted" style="margin:0;">📅 <%= daysLeftText %>&nbsp;&nbsp;📊 <%= usageLeftText %></p>
 
     <label style="margin-top:18px;">Subscription URL</label>
     <p class="muted" style="margin:0 0 6px;">Paste this into your VPN client app. This same link also opens this page when viewed in a browser.</p>
