@@ -293,15 +293,19 @@ app.get('/', requireAuth, (req, res) => {
   });
 });
 
-// Enable/disable individual modes (core / protocol / transport) --
-// a user-requested, explicit exception to product-vision.md rules
-// 7/20 (see docs/how-program-work.md's Change Log and the note added
-// to product-vision.md itself). Order matters here: the new state is
-// persisted and every core is fully reloaded against it BEFORE this
-// handler responds, so the redirect the admin's browser follows always
-// lands on a dashboard that already reflects the change -- no window
-// where the page shows stale core/health state.
-app.post('/settings/modes', requireAuth, requireCsrf, async (req, res) => {
+// Combined mode toggles + time/usage limits, saved together from one
+// "Apply Changes" button (user request -- previously two separate
+// forms/routes). Mode enable/disable is a user-requested, explicit
+// exception to product-vision.md rules 7/20 (see docs/how-program-
+// work.md's Change Log and the note added to product-vision.md
+// itself). Cores are only restarted if the mode selection actually
+// changed -- saving just a limits change shouldn't disrupt existing
+// connections. Order matters when a restart is needed: the new state
+// is persisted and every core is fully reloaded against it BEFORE
+// this handler responds, so the redirect the admin's browser follows
+// always lands on a dashboard that already reflects the change -- no
+// window where the page shows stale core/health state.
+app.post('/settings/advanced', requireAuth, requireCsrf, async (req, res) => {
   const newState = {};
   for (const [dimension, values] of Object.entries(MODE_DIMENSIONS)) {
     newState[dimension] = {};
@@ -314,28 +318,23 @@ app.post('/settings/modes', requireAuth, requireCsrf, async (req, res) => {
   // Reject a submission that would leave any dimension with zero
   // enabled options (e.g. every Core value turned off) -- the panel
   // must always have at least one option to generate/serve per
-  // dimension. Nothing is persisted and no core is restarted in this
-  // case; the admin's browser lands back on the dashboard with an
-  // error banner instead.
+  // dimension. Nothing is persisted (modes OR limits) and no core is
+  // restarted in this case; the admin's browser lands back on the
+  // dashboard with an error banner instead.
   const invalidDimensions = emptyDimensions(newState);
   if (invalidDimensions.length > 0) {
     return res.redirect(`/?modesError=${invalidDimensions.join(',')}`);
   }
 
-  setModeState(newState); // 1. apply the changes
-  await inbounds.reloadCores(); // 2. only then restart the affected cores
+  const modesChanged = JSON.stringify(getModeState()) !== JSON.stringify(newState);
 
-  res.redirect('/'); // 3. respond once both are done
-});
-
-// Set the admin-selectable subscription time/usage limits
-// (src/subscriptionLimits.js), per user request. Empty fields mean
-// unlimited (the default) -- see that module's header. Unlike
-// /settings/modes, no core restart is needed here: limits are a
-// display-only figure (days left / usage left), not something that
-// changes what xray-core/sing-box are configured to serve.
-app.post('/settings/limits', requireAuth, requireCsrf, (req, res) => {
+  setModeState(newState);
   setLimits({ days: req.body.days, usageGB: req.body.usage_gb });
+
+  if (modesChanged) {
+    await inbounds.reloadCores(); // only restart cores when a mode actually changed
+  }
+
   res.redirect('/');
 });
 

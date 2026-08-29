@@ -20,21 +20,6 @@
   <% } %>
 
   <div class="card">
-    <div class="page-header" style="margin-bottom:14px;">
-      <div>
-        <h2 style="margin-bottom:4px;">System <span class="health-badge health-<%= systemStatus %>"><%= systemStatus %></span></h2>
-        <p class="muted" style="margin:0;"><%= activeCount %> / <%= totalCount %> endpoints active</p>
-        <p class="muted" style="margin:4px 0 0;">📅 <%= daysLeftText %>&nbsp;&nbsp;📊 <%= usageLeftText %></p>
-      </div>
-    </div>
-    <p class="muted" style="margin-top:0;">
-      Every combination of protocol, transport, ALPN, and TLS
-      fingerprint is auto-generated automatically -- nothing to set up.
-      All of them ride Railway's single HTTPS domain (<%= externalHost %>:443).
-      Share the Subscription URL below: opened in a browser it shows a
-      friendly overview page, and pasted into a client app it imports
-      every config at once -- same link either way.
-    </p>
     <div>
       <label style="margin-top:0;">Subscription URL</label>
       <div class="link-box">
@@ -46,19 +31,24 @@
 
   <div class="card">
     <h2 style="margin-bottom:4px;">Advanced: modes &amp; limits</h2>
-
-    <h3 style="margin-bottom:4px;">Modes</h3>
     <p class="muted" style="margin-top:0;">
-      Turn individual modes off if you don't want them offered at all.
-      Only one representative combination is on by default (Xray &amp;
-      sing-box, VLESS, WebSocket, HTTP/1.1, Chrome) -- every other
-      combination is still generated and one click away here. Each
-      section needs at least one option enabled at all times. Applying
-      changes restarts the affected proxy engines, so give it a few
-      seconds, then update your subscription in your client app.
+      One Apply Changes button saves both sections below together.
     </p>
-    <form method="POST" action="/settings/modes" id="modesForm">
+
+    <form method="POST" action="/settings/advanced" id="advancedForm">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+      <h3 style="margin-bottom:4px;">Modes</h3>
+      <p class="muted" style="margin-top:0;">
+        Turn individual modes off if you don't want them offered at all.
+        Only one representative combination is on by default (Xray &amp;
+        sing-box, VLESS, WebSocket, HTTP/1.1, Chrome) -- every other
+        combination is still generated and one click away here. Each
+        section needs at least one option enabled at all times. If any
+        mode changes, applying restarts the affected proxy engines, so
+        give it a few seconds, then update your subscription in your
+        client app.
+      </p>
       <% Object.entries(modeDimensions).forEach(([dimension, values]) => { %>
         <label style="text-transform: capitalize;"><%= dimension %></label>
         <div class="mode-grid">
@@ -70,19 +60,15 @@
           <% }) %>
         </div>
       <% }) %>
-      <button type="submit" id="applyModesBtn" class="btn btn-apply btn-block" style="margin-top:16px;" disabled>Apply Changes</button>
-    </form>
 
-    <hr class="section-divider">
+      <hr class="section-divider">
 
-    <h3 style="margin-bottom:4px;">Time &amp; usage limits</h3>
-    <p class="muted" style="margin-top:0;">
-      Optionally cap this subscription to a number of days and/or a
-      total data amount. Leave a field blank for unlimited (the
-      default). Saving restarts the countdown from now.
-    </p>
-    <form method="POST" action="/settings/limits">
-      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <h3 style="margin-bottom:4px;">Time &amp; usage limits</h3>
+      <p class="muted" style="margin-top:0;">
+        Optionally cap this subscription to a number of days and/or a
+        total data amount. Leave a field blank for unlimited (the
+        default). Applying restarts the countdown from now.
+      </p>
       <div class="form-row">
         <div style="flex:1; min-width:140px;">
           <label>Days</label>
@@ -93,18 +79,19 @@
           <input type="number" name="usage_gb" min="0.01" step="0.01" placeholder="Unlimited" value="<%= limitUsageGB %>">
         </div>
       </div>
-      <button type="submit" class="btn btn-accent btn-block" style="margin-top:16px;">Save Limits</button>
+
+      <button type="submit" id="applyBtn" class="btn btn-apply btn-block" style="margin-top:16px;" disabled>Apply Changes</button>
     </form>
   </div>
 </div>
 
 <div class="modal-backdrop" id="confirm-modal" onclick="if(event.target===this) closeConfirmModal()">
   <div class="modal-box">
-    <h3>Apply mode changes?</h3>
-    <p class="muted">Affected proxy engines will restart, and you will need to update your subscription in your client app afterwards.</p>
+    <h3>Apply changes?</h3>
+    <p class="muted">This saves your mode selections and time/usage limits. If any mode changed, affected proxy engines will restart and you'll need to update your subscription in your client app afterwards.</p>
     <div class="modal-actions">
       <button type="button" class="btn" onclick="closeConfirmModal()">Cancel</button>
-      <button type="button" class="btn btn-apply" onclick="confirmApplyModes()">Apply Changes</button>
+      <button type="button" class="btn btn-apply" onclick="confirmApply()">Apply Changes</button>
     </div>
   </div>
 </div>
@@ -144,28 +131,33 @@
 
   // Mode toggles: block unchecking the last remaining checked option
   // within a dimension (e.g. Core, Protocol) client-side, mirroring
-  // the server-side check in POST /settings/modes -- a dimension must
-  // always keep at least one option enabled. Also keeps the chip's
-  // .selected class (its accent-colored background) in sync with the
-  // checkbox's actual checked state, and re-evaluates whether the
-  // Apply Changes button should be enabled (see below).
+  // the server-side check in POST /settings/advanced -- a dimension
+  // must always keep at least one option enabled. Also keeps the
+  // chip's .selected class (its accent-colored background) in sync
+  // with the checkbox's actual checked state, and re-evaluates
+  // whether the Apply Changes button should be enabled (see below).
+  var advancedForm = document.getElementById('advancedForm');
   var modeCheckboxes = Array.prototype.slice.call(document.querySelectorAll('.mode-toggle input[type="checkbox"]'));
+  var limitInputs = Array.prototype.slice.call(advancedForm.querySelectorAll('input[type="number"]'));
 
-  // Snapshot of the checkbox state as loaded from the server, used to
-  // detect whether the admin has actually changed anything -- Apply
-  // Changes starts disabled and only becomes clickable once the
-  // current selection differs from this snapshot (not on every click).
-  function modesSignature() {
-    return modeCheckboxes
+  // Snapshot of the whole form (mode checkboxes + the two limit
+  // fields) as loaded from the server, used to detect whether the
+  // admin has actually changed anything -- Apply Changes starts
+  // disabled and only becomes clickable once the current form state
+  // differs from this snapshot (not on every click/keystroke).
+  function formSignature() {
+    var modesPart = modeCheckboxes
       .filter(function (cb) { return cb.checked; })
       .map(function (cb) { return cb.name; })
       .sort()
       .join(',');
+    var limitsPart = limitInputs.map(function (input) { return input.name + '=' + input.value; }).join('&');
+    return modesPart + '|' + limitsPart;
   }
-  var initialModesSignature = modesSignature();
-  var applyModesBtn = document.getElementById('applyModesBtn');
-  function refreshApplyModesButton() {
-    applyModesBtn.disabled = modesSignature() === initialModesSignature;
+  var initialFormSignature = formSignature();
+  var applyBtn = document.getElementById('applyBtn');
+  function refreshApplyButton() {
+    applyBtn.disabled = formSignature() === initialFormSignature;
   }
 
   modeCheckboxes.forEach(function (checkbox) {
@@ -178,13 +170,17 @@
         if (!anyStillChecked) {
           this.checked = true;
           alert('At least one option must stay enabled in this section.');
-          refreshApplyModesButton();
+          refreshApplyButton();
           return;
         }
       }
       chip.classList.toggle('selected', this.checked);
-      refreshApplyModesButton();
+      refreshApplyButton();
     });
+  });
+
+  limitInputs.forEach(function (input) {
+    input.addEventListener('input', refreshApplyButton);
   });
 
   // Confirmation is a panel-styled modal (matching the QR modal),
@@ -193,13 +189,13 @@
   // Changes button does the actual form.submit() (which -- unlike a
   // dispatched 'submit' event -- doesn't re-trigger this listener, so
   // there's no loop).
-  document.getElementById('modesForm').addEventListener('submit', function (e) {
+  advancedForm.addEventListener('submit', function (e) {
     e.preventDefault();
     document.getElementById('confirm-modal').classList.add('open');
   });
-  function confirmApplyModes() {
+  function confirmApply() {
     document.getElementById('confirm-modal').classList.remove('open');
-    document.getElementById('modesForm').submit();
+    advancedForm.submit();
   }
   function closeConfirmModal() {
     document.getElementById('confirm-modal').classList.remove('open');
