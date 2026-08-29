@@ -10,6 +10,7 @@ const net = require('net');
 const express = require('express');
 const session = require('express-session');
 const { getOrCreateSessionSecret } = require('./db'); // also initializes SQLite DB and tables on startup
+const { version: APP_VERSION } = require('../package.json');
 const { seedAdminFromEnv, verifyLogin, requireAuth, getOrCreateCsrfToken, requireCsrf } = require('./auth');
 const inbounds = require('./inbounds');
 const { listCores } = require('./cores');
@@ -60,6 +61,10 @@ const HOST = '0.0.0.0';
 
 app.set('view engine', 'ejs');
 app.set('views', `${__dirname}/views`);
+// Available to every view (including partials/header.ejs's <title>)
+// without each res.render() call needing to pass it explicitly, so
+// the displayed version can never drift from package.json's again.
+app.locals.appVersion = APP_VERSION;
 // Railway terminates TLS at its edge and forwards plain HTTP with an
 // X-Forwarded-Proto header; trusting the proxy lets express-session
 // correctly mark cookies secure in production.
@@ -284,7 +289,6 @@ app.get('/', requireAuth, (req, res) => {
     limitUsageGB: limits.usageGB === null ? '' : limits.usageGB,
     daysLeftText: usageSummary.unlimitedDays ? 'Unlimited' : `${usageSummary.daysLeft} Days`,
     usageLeftText: usageSummary.unlimitedUsage ? 'Unlimited' : formatBytes(usageSummary.usageLeftBytes),
-    limitsUpdated: req.query.updated === 'limits',
     dataDirWarning,
   });
 });
@@ -332,7 +336,7 @@ app.post('/settings/modes', requireAuth, requireCsrf, async (req, res) => {
 // changes what xray-core/sing-box are configured to serve.
 app.post('/settings/limits', requireAuth, requireCsrf, (req, res) => {
   setLimits({ days: req.body.days, usageGB: req.body.usage_gb });
-  res.redirect('/?updated=limits');
+  res.redirect('/');
 });
 
 // The actual publicly-listening socket. Every accepted connection

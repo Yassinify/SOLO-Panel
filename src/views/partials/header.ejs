@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>SOLO Panel - 1.0.4</title>
+  <title>SOLO Panel - <%= appVersion %></title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
@@ -13,7 +13,10 @@
 <% if (typeof loggedIn !== 'undefined' && loggedIn) { %>
   <div class="topbar">
     <div class="topbar-side"></div>
-    <a href="/" class="brand brand-center">SOLO<span>Panel</span></a>
+    <div class="brand-wrap">
+      <a href="/" class="brand brand-center">SOLO<span>Panel</span></a>
+      <div class="brand-version">v<%= appVersion %></div>
+    </div>
     <div class="topbar-side topbar-user">
       <form class="inline" method="POST" action="/logout">
         <input type="hidden" name="_csrf" value="<%= csrfToken %>" />

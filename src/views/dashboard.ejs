@@ -1,4 +1,4 @@
-<%- include('partials/header', { title: 'Inbounds', loggedIn: loggedIn, csrfToken: csrfToken }) %>
+<%- include('partials/header', { loggedIn: loggedIn, csrfToken: csrfToken }) %>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <div class="container">
   <% if (dataDirWarning) { %>
@@ -10,12 +10,6 @@
         <li>or right-click the service on the project canvas → <strong>Attach Volume</strong> / <strong>New Volume</strong></li>
       </ol>
       <p class="muted" style="margin:0;">Any mount path works (e.g. <code>/app/data</code>) — the panel detects it automatically. Redeploy afterward.</p>
-    </div>
-  <% } %>
-
-  <% if (limitsUpdated) { %>
-    <div class="card" style="border-color: var(--accent);">
-      <p style="margin:0;"><strong>Limits updated.</strong></p>
     </div>
   <% } %>
 
@@ -59,11 +53,17 @@
     </p>
     <form method="POST" action="/settings/limits">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-      <label>Days</label>
-      <input type="number" name="days" min="1" step="1" placeholder="Unlimited" value="<%= limitDays %>" style="margin-bottom:12px;">
-      <label>Usage limit (GB)</label>
-      <input type="number" name="usage_gb" min="0.01" step="0.01" placeholder="Unlimited" value="<%= limitUsageGB %>">
-      <button type="submit" class="btn btn-accent" style="margin-top:16px;">Save Limits</button>
+      <div class="form-row">
+        <div style="flex:1; min-width:140px;">
+          <label>Days</label>
+          <input type="number" name="days" min="1" step="1" placeholder="Unlimited" value="<%= limitDays %>">
+        </div>
+        <div style="flex:1; min-width:140px;">
+          <label>Usage limit (GB)</label>
+          <input type="number" name="usage_gb" min="0.01" step="0.01" placeholder="Unlimited" value="<%= limitUsageGB %>">
+        </div>
+      </div>
+      <button type="submit" class="btn btn-accent btn-block" style="margin-top:16px;">Save Limits</button>
     </form>
   </div>
 
@@ -82,14 +82,14 @@
         <label style="text-transform: capitalize;"><%= dimension %></label>
         <div class="mode-grid">
           <% values.forEach((value) => { %>
-            <label class="mode-toggle">
+            <label class="mode-toggle<%= modeState[dimension][value] ? ' selected' : '' %>">
               <input type="checkbox" name="<%= dimension %>_<%= value %>" data-dimension="<%= dimension %>" <%= modeState[dimension][value] ? 'checked' : '' %>>
               <%= labelForMode(dimension, value) %>
             </label>
           <% }) %>
         </div>
       <% }) %>
-      <button type="submit" class="btn btn-accent" style="margin-top:16px;">Apply Changes</button>
+      <button type="submit" class="btn btn-accent btn-block" style="margin-top:16px;">Apply Changes</button>
     </form>
   </div>
 </div>
@@ -130,17 +130,23 @@
   // Mode toggles: block unchecking the last remaining checked option
   // within a dimension (e.g. Core, Protocol) client-side, mirroring
   // the server-side check in POST /settings/modes -- a dimension must
-  // always keep at least one option enabled.
+  // always keep at least one option enabled. Also keeps the chip's
+  // .selected class (its accent-colored background) in sync with the
+  // checkbox's actual checked state.
   document.querySelectorAll('.mode-toggle input[type="checkbox"]').forEach(function (checkbox) {
     checkbox.addEventListener('change', function () {
-      if (this.checked) return;
-      var dimension = this.dataset.dimension;
-      var groupInputs = document.querySelectorAll('input[type="checkbox"][data-dimension="' + dimension + '"]');
-      var anyStillChecked = Array.prototype.some.call(groupInputs, function (input) { return input.checked; });
-      if (!anyStillChecked) {
-        this.checked = true;
-        alert('At least one option must stay enabled in this section.');
+      var chip = this.closest('.mode-toggle');
+      if (!this.checked) {
+        var dimension = this.dataset.dimension;
+        var groupInputs = document.querySelectorAll('input[type="checkbox"][data-dimension="' + dimension + '"]');
+        var anyStillChecked = Array.prototype.some.call(groupInputs, function (input) { return input.checked; });
+        if (!anyStillChecked) {
+          this.checked = true;
+          alert('At least one option must stay enabled in this section.');
+          return;
+        }
       }
+      chip.classList.toggle('selected', this.checked);
     });
   });
 
