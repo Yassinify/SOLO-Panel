@@ -72,8 +72,8 @@ app.set('trust proxy', 1);
 
 // Must run before static/session/routes: forwards XHTTP requests
 // (matched by path) straight to the matching inbound's internal core
-// process (xray or sing-box, via internalPortForRow), bypassing the
-// rest of the panel's middleware chain entirely.
+// process (via internalPortForRow), bypassing the rest of the panel's
+// middleware chain entirely.
 const { xhttpMiddleware, handleConnection } = attachProxy(server, inbounds.listInbounds, internalPortForRow);
 app.use(xhttpMiddleware);
 
@@ -111,7 +111,7 @@ app.get('/health', (req, res) => {
 // `/sub/:subId/raw` below still works too, as a explicit-raw alias
 // for any subscription already saved with that exact URL.
 function sendRawSubscription(req, res) {
-  // Rows whose mode (core/protocol/transport) is currently disabled
+  // Rows whose mode (protocol/transport) is currently disabled
   // via src/modes.js are left out of the subscription entirely --
   // that's the whole point of disabling a mode. See docs/how-program-
   // work.md for this user-requested exception to vision rules 7/20.
@@ -316,7 +316,7 @@ app.post('/settings/advanced', requireAuth, requireCsrf, async (req, res) => {
   }
 
   // Reject a submission that would leave any dimension with zero
-  // enabled options (e.g. every Core value turned off) -- the panel
+  // enabled options (e.g. every Protocol value turned off) -- the panel
   // must always have at least one option to generate/serve per
   // dimension. Nothing is persisted (modes OR limits) and no core is
   // restarted in this case; the admin's browser lands back on the

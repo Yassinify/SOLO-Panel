@@ -6,7 +6,7 @@
 // There is no admin-facing inbound CRUD. Instead
 // `ensureGeneratedInbounds()` auto-seeds one inbound per supported
 // (protocol x transport) combination, all running behind Railway's
-// own edge TLS on its single public port — see docs/how-program-work.md.
+// own edge TLS on its single public port -- see docs/how-program-work.md.
 'use strict';
 
 const crypto = require('crypto');
@@ -16,25 +16,18 @@ const { generatePath, generateSsPassword, generateRawHttpPath } = require('./uti
 const { getModeState, isRowEnabled } = require('./modes');
 
 // Every (core x protocol x transport) combination this panel
-// generates. `raw`/`xhttp`/shadowsocks are Xray-only (xhttp and raw's
-// HTTP-camouflage sniffing aren't things sing-box implements the same
-// way; shadowsocks has no ws/httpupgrade transport in sing-box at all
-// - see src/singbox/config.js's header). Credentials are generated
-// once per protocol (not per core+transport) and reused across every
-// row of that protocol, so a given protocol is one account with many
-// front doors - xray and sing-box included - not a separate identity
-// per core. Order here is also seeding order, so it determines
-// inbound ids (and therefore each core's own internal ports - see
-// xray/config.js and singbox/config.js, which use different port
-// ranges precisely so ids can overlap safely between cores).
+// generates. Xray-only (sing-box support was removed 2026-08-29 per
+// user request -- see docs/how-program-work.md's Change Log).
+// Credentials are generated once per protocol (not per transport) and
+// reused across every row of that protocol, so a given protocol is
+// one account with many front doors, not a separate identity per
+// transport. Order here is also seeding order, so it determines
+// inbound ids (and therefore each row's internal port -- see
+// xray/config.js).
 const CORE_COMBOS = {
   xray: {
     protocols: ['vless', 'vmess', 'trojan', 'shadowsocks'],
     transports: ['ws', 'xhttp', 'httpupgrade', 'raw'],
-  },
-  singbox: {
-    protocols: ['vless', 'vmess', 'trojan'],
-    transports: ['ws', 'httpupgrade'],
   },
 };
 
@@ -144,7 +137,7 @@ function addClientTraffic(inboundId, uplinkDelta, downlinkDelta) {
  * only — see CORE_COMBOS) and (re)start it. Called for every
  * registered core on boot (see reloadCores below), and safe to call
  * for a single core after a future targeted change. Every generated
- * row is served unless its mode (core/protocol/transport) has been
+ * row is served unless its mode (protocol/transport) has been
  * explicitly disabled via src/modes.js — a user-requested exception
  * to product-vision.md rules 7/20, see docs/how-program-work.md.
  *

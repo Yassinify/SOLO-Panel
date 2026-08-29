@@ -4,8 +4,7 @@ A zero-config, self-hosted VPN/proxy panel that deploys as a single
 service on [Railway](https://railway.com) — no VPS, no external
 database, no manual setup.
 
-It runs [Xray-core](https://github.com/XTLS/Xray-core) and
-[sing-box](https://github.com/SagerNet/sing-box), auto-generating
+It runs [Xray-core](https://github.com/XTLS/Xray-core), auto-generating
 VLESS / VMess / Trojan / Shadowsocks configs over WebSocket, XHTTP, and
 HTTPUpgrade — all sharing Railway's single public HTTPS port (TLS
 terminated at Railway's edge). No TCP Proxy, no host/port setup.
@@ -17,11 +16,10 @@ terminated at Railway's edge). No TCP Proxy, no host/port setup.
 - One combined subscription URL — opens as a friendly web panel in a
   browser, or imports straight into any VPN client app
 - Health monitoring and automatic recovery for every generated config
-- Optional admin controls: enable/disable cores, protocols,
-  transports, ALPN, and TLS fingerprints; set a subscription time/data
-  limit
-- Single admin login, SQLite storage, xray-core/sing-box binaries
-  installed automatically — nothing to compile or Dockerize
+- Optional admin controls: enable/disable protocols, transports,
+  ALPN, and TLS fingerprints; set a subscription time/data limit
+- Single admin login, SQLite storage, xray-core binary installed
+  automatically — nothing to compile or Dockerize
 
 ## Deploy your own copy
 
@@ -60,14 +58,14 @@ terminated at Railway's edge). No TCP Proxy, no host/port setup.
 
 ```bash
 cp .env.example .env   # then edit .env
-npm install             # also downloads the xray-core/sing-box binaries
+npm install             # also downloads the xray-core binary
 npm start
 ```
 
 Visit `http://localhost:3000`.
 
-> **Windows:** the downloaded binaries are Linux-only (Railway's
-> target), so the panel UI works locally but proxy cores won't
+> **Windows:** the downloaded binary is Linux-only (Railway's
+> target), so the panel UI works locally but the proxy core won't
 > actually start. Use WSL, Linux, or a real Railway deployment to test
 > that part.
 

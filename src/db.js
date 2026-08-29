@@ -45,21 +45,20 @@ db.exec(`
   );
 `);
 
-// Inbounds table: one row per auto-generated inbound, across BOTH
-// cores (docs/product-vision.md rule 6/9 - multi-core, endpoint
-// diversity). `core` is 'xray' or 'singbox' (see
-// `inbounds.js#ensureGeneratedInbounds` and src/cores/index.js);
-// protocol/transport combinations differ per core (sing-box doesn't
-// generate shadowsocks rows - see src/singbox/config.js's header for
-// why). All of them run behind Railway's own edge TLS on the single
-// public port (no REALITY, no admin-configured TCP Proxy / host /
-// port - see Change Log). ALPN and TLS fingerprint don't change
-// server-side behavior (Railway's edge does the real TLS handshake,
-// not the core), so they are NOT stored per row - they're generated
-// as link-only variants at share-link build time (see xray/links.js).
-// Credentials are shared across every row of the same (core x
-// protocol), so every generated config is a different front door to
-// the same account.
+// Inbounds table: one row per auto-generated inbound (see
+// `inbounds.js#ensureGeneratedInbounds` and src/cores/index.js).
+// `core` is always 'xray' -- sing-box support was removed 2026-08-29
+// per user request (see docs/how-program-work.md's Change Log); the
+// column is kept as-is (no migration needed) rather than dropped.
+// All rows run behind Railway's own edge TLS on the single public
+// port (no REALITY, no admin-configured TCP Proxy / host / port - see
+// Change Log). ALPN and TLS fingerprint don't change server-side
+// behavior (Railway's edge does the real TLS handshake, not the
+// core), so they are NOT stored per row - they're generated as
+// link-only variants at share-link build time (see xray/links.js).
+// Credentials are shared across every row of the same protocol, so
+// every generated config is a different front door to the same
+// account.
 // Breaking schema change note: if an `inbounds` table already exists
 // without a `core` column (pre-multi-core shape), or in an even older
 // shape (REALITY-era columns), drop and recreate it fresh - old

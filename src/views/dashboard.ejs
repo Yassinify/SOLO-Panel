@@ -41,8 +41,8 @@
       <h3 style="margin-bottom:4px;">Modes</h3>
       <p class="muted" style="margin-top:0;">
         Turn individual modes off if you don't want them offered at all.
-        Only one representative combination is on by default (Xray &amp;
-        sing-box, VLESS, WebSocket, HTTP/1.1, Chrome) -- every other
+        Only one representative combination is on by default (VLESS,
+        WebSocket, HTTP/1.1, Chrome) -- every other
         combination is still generated and one click away here. Each
         section needs at least one option enabled at all times. If any
         mode changes, applying restarts the affected proxy engines, so
@@ -130,7 +130,7 @@
   });
 
   // Mode toggles: block unchecking the last remaining checked option
-  // within a dimension (e.g. Core, Protocol) client-side, mirroring
+  // within a dimension (e.g. Protocol, Transport) client-side, mirroring
   // the server-side check in POST /settings/advanced -- a dimension
   // must always keep at least one option enabled. Also keeps the
   // chip's .selected class (its accent-colored background) in sync
