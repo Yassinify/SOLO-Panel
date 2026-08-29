@@ -47,8 +47,15 @@ function remarkFor(inbound, alpn, fingerprint) {
 // blob, and shadowsocks uses a `plugin=` value — see buildVmessLink /
 // buildShadowsocksLink below).
 function buildTransportParams(inbound, alpn, fingerprint, host) {
+  // Client apps' share-link parsers use the pre-rename "tcp" as the
+  // `type` value for this transport, not Xray-core's own JSON-config
+  // alias "raw" (Xray-core v24.9.30+ renamed the "tcp" transport to
+  // "raw" server-side, but that rename was never carried into the
+  // client-facing URI convention -- every real-world example link
+  // still uses type=tcp). See docs/problem.md for the research trail.
+  const linkTransportType = inbound.transport === 'raw' ? 'tcp' : inbound.transport;
   const params = new URLSearchParams({
-    type: inbound.transport,
+    type: linkTransportType,
     security: 'tls',
     alpn,
     fp: fingerprint,
@@ -59,10 +66,27 @@ function buildTransportParams(inbound, alpn, fingerprint, host) {
   if (inbound.transport === 'xhttp') {
     params.set('mode', 'auto');
   }
+  if (inbound.transport === 'raw') {
+    // Tells the client to send the fake HTTP request line/headers
+    // camouflage matching xray/config.js's rawSettings.header.type
+    // 'http' -- without this the client defaults to no HTTP
+    // camouflage and never sends the request line src/xray/proxy.js's
+    // handleConnection() sniffs for, so the connection never matches
+    // any inbound server-side.
+    params.set('headerType', 'http');
+  }
   return params;
 }
 
 function buildVmessLink(inbound, alpn, fingerprint, host, remark) {
+  // Same client-facing-vs-server-config naming split as
+  // buildTransportParams() above: vmess links' `net` field needs the
+  // pre-rename "tcp" value for the raw transport (not Xray-core's own
+  // "raw" JSON alias), and `type` (the header-camouflage field for
+  // vmess links) needs "http" instead of "none" so the client actually
+  // sends the fake HTTP request line xray/proxy.js's handleConnection()
+  // sniffs for. See docs/problem.md for the research trail.
+  const isRaw = inbound.transport === 'raw';
   const payload = {
     v: '2',
     ps: remark,
@@ -71,8 +95,8 @@ function buildVmessLink(inbound, alpn, fingerprint, host, remark) {
     id: inbound.client_uuid,
     aid: '0',
     scy: 'auto',
-    net: inbound.transport,
-    type: 'none',
+    net: isRaw ? 'tcp' : inbound.transport,
+    type: isRaw ? 'http' : 'none',
     host,
     path: inbound.path,
     tls: 'tls',

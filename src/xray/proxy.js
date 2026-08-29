@@ -61,8 +61,26 @@ function attachProxy(server, listInbounds, internalPortForRow) {
   }
 
   function findXhttpInboundForPath(path) {
-    return listInbounds().find((row) => row.path === path && row.transport === 'xhttp')
-      || null;
+    // XHTTP (SplitHTTP) clients never request the literal configured
+    // path: Xray normalizes it to end with `/` internally and (in our
+    // config -- mode 'auto', no TLS/REALITY, no `extra` overrides --
+    // which resolves to packet-up mode) appends a per-connection
+    // session id, plus a sequence number per upload chunk, as extra
+    // URL path segments after it: GET `{path}/{sessionId}` opens the
+    // download stream, POST `{path}/{sessionId}/{seq}` sends each
+    // upload chunk. An exact match against the stored `path` would
+    // therefore 404 on every real request. Match the stored path
+    // itself (harmless edge case) or anything starting with it plus a
+    // `/` boundary; the request is still forwarded to xray-core
+    // unmodified (full path incl. session/seq) -- xray-core's own
+    // XHTTP handler parses those segments itself, so only this lookup
+    // needed the prefix match. See docs/problem.md for the research
+    // trail (XTLS/Xray-core's own config.go/dialer.go/hub.go).
+    return listInbounds().find((row) => {
+      if (row.transport !== 'xhttp') return false;
+      const base = row.path.endsWith('/') ? row.path : `${row.path}/`;
+      return path === row.path || path.startsWith(base);
+    }) || null;
   }
 
   // WS and HTTPUpgrade both perform an HTTP `Upgrade` handshake, so
