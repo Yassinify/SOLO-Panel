@@ -1,19 +1,15 @@
 <%- include('partials/header', { title: 'Inbounds', loggedIn: loggedIn, csrfToken: csrfToken }) %>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <div class="container">
-  <div class="page-header">
-    <h1>Inbounds</h1>
-  </div>
-
   <% if (dataDirWarning) { %>
     <div class="card" style="border-color: var(--danger);">
-      <p style="margin:0;"><strong>⚠️ Persistent storage isn't configured.</strong> Without a Railway Volume, your admin password, generated links, and settings will be deleted on every redeploy. To fix this: in your Railway service go to <strong>Settings → Volumes</strong>, create a Volume and mount it (e.g. at <code>/app/data</code>), then set the <code>DATA_DIR</code> variable under <strong>Variables</strong> to that same path and redeploy.</p>
-    </div>
-  <% } %>
-
-  <% if (modesUpdated) { %>
-    <div class="card" style="border-color: var(--accent);">
-      <p style="margin:0;"><strong>Mode changes applied.</strong> Please update your subscription in your client app so it picks up the new set of links.</p>
+      <p style="margin:0 0 10px;"><strong>⚠️ Persistent storage isn't configured.</strong> Without a Railway Volume, your admin password, generated links, and settings will be deleted on every redeploy.</p>
+      <p style="margin:0 0 6px; font-weight:600;">To fix this, attach a Volume to this service:</p>
+      <ol class="step-list">
+        <li><code>⌘K</code> / <code>Ctrl+K</code> (Command Palette) → search “volume” → <strong>New Volume</strong></li>
+        <li>or right-click the service on the project canvas → <strong>Attach Volume</strong> / <strong>New Volume</strong></li>
+      </ol>
+      <p class="muted" style="margin:0;">Any mount path works (e.g. <code>/app/data</code>) — the panel detects it automatically. Redeploy afterward.</p>
     </div>
   <% } %>
 
@@ -54,9 +50,9 @@
     </div>
   </div>
 
-  <details class="card">
-    <summary class="muted" style="cursor:pointer; font-weight:600;">Time &amp; usage limits</summary>
-    <p class="muted" style="margin-top:14px;">
+  <div class="card">
+    <h2 style="margin-bottom:4px;">Time &amp; usage limits</h2>
+    <p class="muted" style="margin-top:0;">
       Optionally cap this subscription to a number of days and/or a
       total data amount. Leave a field blank for unlimited (the
       default). Saving restarts the countdown from now.
@@ -69,7 +65,7 @@
       <input type="number" name="usage_gb" min="0.01" step="0.01" placeholder="Unlimited" value="<%= limitUsageGB %>">
       <button type="submit" class="btn btn-accent" style="margin-top:16px;">Save Limits</button>
     </form>
-  </details>
+  </div>
 
   <div class="card">
     <h2 style="margin-bottom:4px;">Advanced: modes</h2>

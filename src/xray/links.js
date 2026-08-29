@@ -165,4 +165,20 @@ function buildAllClientLinks(inboundRows, externalHost, alpnValues = ALPN_VARIAN
   return inboundRows.flatMap((inbound) => buildLinksForInbound({ inbound, externalHost, alpnValues, fingerprints }));
 }
 
-module.exports = { buildAllClientLinks, buildLinksForInbound, labelForInbound, EXTERNAL_PORT };
+/**
+ * A non-functional "informational" entry, included in the raw
+ * subscription feed only (see server.js's sendRawSubscription()), so
+ * a client app's own server list shows the current days-left/usage-
+ * left figures directly -- without the user needing to open the
+ * Subscription Web Panel. Deliberately points at the local loopback
+ * address (127.0.0.1:443): this entry is never meant to actually be
+ * connected to, only its remark carries meaning. Uses vless (the
+ * simplest URI shape) with a fixed all-zero dummy UUID -- same one
+ * for every deployment, since it's not tied to any real credential.
+ */
+function buildUsageInfoLink(remark) {
+  const params = new URLSearchParams({ encryption: 'none', security: 'none', type: 'tcp' });
+  return `vless://00000000-0000-0000-0000-000000000000@127.0.0.1:443?${params}#${encodeURIComponent(remark)}`;
+}
+
+module.exports = { buildAllClientLinks, buildLinksForInbound, buildUsageInfoLink, labelForInbound, EXTERNAL_PORT };

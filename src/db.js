@@ -1,8 +1,12 @@
 // Database setup for SOLO Panel.
 //
-// Uses SQLite (better-sqlite3), stored on a Railway Volume mounted at
-// the path given by DATA_DIR (defaults to ./data for local dev), so
-// data survives redeploys without needing an external DB account.
+// Uses SQLite (better-sqlite3), stored on a Railway Volume so data
+// survives redeploys without needing an external DB account. The
+// storage directory is resolved as: an explicit DATA_DIR env var (if
+// set) -> Railway's own RAILWAY_VOLUME_MOUNT_PATH (auto-injected once
+// a Volume is attached to the service, no manual variable needed) ->
+// ./data for local dev. See docs/how-program-work.md's Change Log for
+// why the RAILWAY_VOLUME_MOUNT_PATH fallback was added.
 'use strict';
 
 const path = require('path');
@@ -10,7 +14,7 @@ const fs = require('fs');
 const crypto = require('crypto');
 const Database = require('better-sqlite3');
 
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', 'data');
+const DATA_DIR = process.env.DATA_DIR || process.env.RAILWAY_VOLUME_MOUNT_PATH || path.join(__dirname, '..', 'data');
 const DB_PATH = path.join(DATA_DIR, 'panel.db');
 
 if (!fs.existsSync(DATA_DIR)) {

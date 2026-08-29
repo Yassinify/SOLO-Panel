@@ -5,8 +5,7 @@ VLESS / VMess / Trojan / Shadowsocks inbounds — built specifically to
 run on [Railway](https://railway.com) as a single service, no VPS or
 external database required.
 
-Inspired by [3x-ui](https://github.com/MHSanaei/3x-ui)'s UI/UX. Unlike
-a VPS-based panel, SOLO Panel is designed entirely around Railway's
+likea VPS-based panel, SOLO Panel is designed entirely around Railway's
 networking model: every inbound runs as WebSocket, XHTTP, or
 HTTPUpgrade over Railway's single public HTTPS port (TLS terminated at
 Railway's edge) — no TCP Proxy, no manual host/port setup, ever.
@@ -39,14 +38,20 @@ Node.js app automatically (Nixpacks builder, already configured in
 
 ### 3. Attach a Volume (required — do this before first deploy if possible)
 
-SOLO Panel stores its SQLite database and generated xray config under
-the directory in the `DATA_DIR` env var. **Without a Railway Volume,
-this data is wiped on every redeploy**, including your admin account
-and all inbounds/clients.
+SOLO Panel stores its SQLite database and generated xray config on
+disk. **Without a Railway Volume, this data is wiped on every
+redeploy**, including your admin account and all inbounds/clients.
 
-In your Railway service → **Settings → Volumes → New Volume**, mount
-it at a path such as `/app/data`, then set the `DATA_DIR` service
-variable (see below) to that same path.
+In the Railway dashboard, add a Volume to this service (use the
+Command Palette, or right-click the service on the project canvas —
+Railway's UI for this has moved around over time, so if you don't see
+a "Volumes" tab under Settings, look for "Add Volume"/"New Volume" via
+the command palette or right-click menu instead) and give it any
+mount path, e.g. `/app/data`. **No `DATA_DIR` variable needs to be set
+manually** — Railway automatically injects `RAILWAY_VOLUME_MOUNT_PATH`
+once a Volume is attached, and the panel picks that up on its own. You
+only need to set `DATA_DIR` yourself if you want to override that
+default for some reason (see below).
 
 ### 4. Set environment variables
 
@@ -55,13 +60,13 @@ zero variables set (admin/admin login, an auto-generated session
 secret, and a temporary ./data directory). In your Railway service →
 **Variables**, you only need to add the ones you want to change:
 
-| Variable | Default if unset | Description |
-|---|---|---|
-| `ADMIN_PASSWORD` | `admin` | Password for the single admin account (no username, password-only login). Change this before sharing your panel's URL with anyone. |
-| `SESSION_SECRET` | auto-generated | Random string used to sign session cookies. If unset, the panel generates one itself on first boot and stores it in the database — no need to come up with one yourself. |
-| `DATA_DIR` | `./data` | Directory for the SQLite database, generated xray config, and the auto-generated `SESSION_SECRET`. **Set this to your attached Volume's mount path** (step 3), or this data — including your admin account and inbounds — is wiped on every redeploy. |
-| `NODE_ENV` | — | Set to `production` so session cookies are marked secure. Recommended for any public deployment. |
-| `XRAY_VERSION` | latest release | Pins the xray-core version downloaded during install. If unset, the install script automatically looks up XTLS/Xray-core's actual latest stable GitHub release at install time. |
+| Variable         | Default if unset                      | Description                                                                                                                                                                                                                                                                                                         |
+| ---------------- | ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ADMIN_PASSWORD` | `admin`                               | Password for the single admin account (no username, password-only login). Change this before sharing your panel's URL with anyone.                                                                                                                                                                                  |
+| `SESSION_SECRET` | auto-generated                        | Random string used to sign session cookies. If unset, the panel generates one itself on first boot and stores it in the database — no need to come up with one yourself.                                                                                                                                            |
+| `DATA_DIR`       | auto (Volume mount path, or `./data`) | Directory for the SQLite database, generated xray config, and the auto-generated `SESSION_SECRET`. Normally you don't need to set this — once you attach a Volume (step 3), Railway's own `RAILWAY_VOLUME_MOUNT_PATH` is picked up automatically. Only set `DATA_DIR` explicitly if you need to override that path. |
+| `NODE_ENV`       | —                                     | Set to `production` so session cookies are marked secure. Recommended for any public deployment.                                                                                                                                                                                                                    |
+| `XRAY_VERSION`   | latest release                        | Pins the xray-core version downloaded during install. If unset, the install script automatically looks up XTLS/Xray-core's actual latest stable GitHub release at install time.                                                                                                                                     |
 
 Railway automatically provides `PORT`; you don't need to set it.
 
@@ -80,10 +85,11 @@ own Railway-assigned port, incompatible with the single-domain design).
 
 Real footguns in how the panel works, not just config typos:
 
-- **No Volume attached / `DATA_DIR` not set.** Everything (admin
-  account, inbounds, clients, the auto-generated `SESSION_SECRET`) is
-  wiped on every redeploy without one. This is the single most common
-  way to "lose" a working panel. See step 3 above.
+- **No Volume attached.** Everything (admin account, inbounds,
+  clients, the auto-generated `SESSION_SECRET`) is wiped on every
+  redeploy without one. This is the single most common way to "lose"
+  a working panel. See step 3 above — you don't need to set `DATA_DIR`
+  yourself, but you do need to actually attach the Volume.
 - **There's no "forgot password" flow, and only one admin account
   exists.** If its password is lost, the only recovery paths are
   editing `password_hash` directly in the SQLite database, or wiping

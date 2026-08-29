@@ -14,7 +14,7 @@ const { seedAdminFromEnv, verifyLogin, requireAuth, getOrCreateCsrfToken, requir
 const inbounds = require('./inbounds');
 const { listCores } = require('./cores');
 const { orderInbounds } = require('./priority');
-const { buildAllClientLinks, buildLinksForInbound, labelForInbound } = require('./xray/links');
+const { buildAllClientLinks, buildLinksForInbound, buildUsageInfoLink, labelForInbound } = require('./xray/links');
 const { internalPortForRow } = require('./cores/ports');
 const { attachProxy } = require('./xray/proxy');
 const statsPoller = require('./xray/statsPoller');
@@ -112,7 +112,17 @@ function sendRawSubscription(req, res) {
   // work.md for this user-requested exception to vision rules 7/20.
   const enabledRows = inbounds.listInbounds().filter((row) => isRowEnabled(row));
   const links = buildAllClientLinks(orderInbounds(enabledRows), externalHostFor(req), getEnabledAlpnValues(), getEnabledFingerprints());
-  res.type('text/plain').send(Buffer.from(links.join('\n')).toString('base64'));
+
+  // Leading informational entry (non-functional, 127.0.0.1:443 --
+  // see buildUsageInfoLink()'s own header) so a client app's own
+  // server list shows the current days-left/usage-left figures
+  // directly, per user request.
+  const usageSummary = getUsageSummary(inbounds.getTotalTrafficBytes());
+  const usageInfoLink = buildUsageInfoLink(
+    `\ud83d\udcc5 ${usageSummary.unlimitedDays ? 'Unlimited' : `${usageSummary.daysLeft} Days`}  \ud83d\udcca ${usageSummary.unlimitedUsage ? 'Unlimited' : formatBytes(usageSummary.usageLeftBytes)}`
+  );
+
+  res.type('text/plain').send(Buffer.from([usageInfoLink, ...links].join('\n')).toString('base64'));
 }
 
 function sendSubscriptionPanel(req, res, subId) {
@@ -245,14 +255,15 @@ app.get('/', requireAuth, (req, res) => {
   const limits = getLimits();
   const usageSummary = getUsageSummary(inbounds.getTotalTrafficBytes());
 
-  // Persistent-storage warning: DATA_DIR unset means the app fell
-  // back to a path inside the container's own ephemeral filesystem
-  // (see src/db.js), which Railway wipes on every redeploy --
-  // regardless of whether DATA_DIR is actually set to a real
-  // Railway Volume mount path, we can't verify that part from inside
-  // the app, but an unset DATA_DIR is a reliable sign persistent
-  // storage was never configured at all (see README.md step 3).
-  const dataDirWarning = !process.env.DATA_DIR;
+  // Persistent-storage warning: neither DATA_DIR nor Railway's own
+  // RAILWAY_VOLUME_MOUNT_PATH (auto-injected once a Volume is
+  // attached -- see src/db.js) being set means the app fell back to a
+  // path inside the container's own ephemeral filesystem, which
+  // Railway wipes on every redeploy. We can't verify a Volume is
+  // actually attached from inside the app beyond checking for that
+  // env var, but its absence reliably means persistent storage was
+  // never configured at all (see README.md's Volume step).
+  const dataDirWarning = !process.env.DATA_DIR && !process.env.RAILWAY_VOLUME_MOUNT_PATH;
 
   res.render('dashboard', {
     loggedIn: true,
@@ -268,7 +279,6 @@ app.get('/', requireAuth, (req, res) => {
     modeDimensions: MODE_DIMENSIONS,
     modeState,
     labelForMode,
-    modesUpdated: req.query.updated === 'modes',
     modesError: req.query.modesError ? req.query.modesError.split(',') : null,
     limitDays: limits.days === null ? '' : limits.days,
     limitUsageGB: limits.usageGB === null ? '' : limits.usageGB,
@@ -311,7 +321,7 @@ app.post('/settings/modes', requireAuth, requireCsrf, async (req, res) => {
   setModeState(newState); // 1. apply the changes
   await inbounds.reloadCores(); // 2. only then restart the affected cores
 
-  res.redirect('/?updated=modes'); // 3. respond once both are done
+  res.redirect('/'); // 3. respond once both are done
 });
 
 // Set the admin-selectable subscription time/usage limits
