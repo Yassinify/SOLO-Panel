@@ -4,18 +4,24 @@
   <div class="page-header">
     <div>
       <h1 style="margin-bottom:4px;">SOLO Subscription Panel</h1>
-      <p class="muted" style="margin:0;">Everything you need to connect, in one place.</p>
     </div>
   </div>
 
   <div class="card">
     <p class="muted" style="margin:0 0 4px;">Status <span class="health-badge health-<%= systemStatus %>"><%= systemStatus === 'healthy' ? 'Operational' : systemStatus === 'degraded' ? 'Degraded' : 'Unavailable' %></span></p>
-    <% if (location) { %><p class="muted" style="margin:0 0 4px;">Location &nbsp;<%= location %></p><% } %>
+    <p class="muted" style="margin:0 0 4px; display:flex; align-items:center; gap:8px;">
+      <span>Location</span>
+      <% if (location.iso2) { %>
+        <img class="location-flag" src="https://flagcdn.com/24x18/<%= location.iso2 %>.png" srcset="https://flagcdn.com/48x36/<%= location.iso2 %>.png 2x" width="24" height="18" alt="<%= location.name %> flag" style="display:block; border-radius:2px; flex-shrink:0;">
+      <% } else { %>
+        <span><%= location.flag %></span>
+      <% } %>
+      <span><%= location.name %></span>
+    </p>
     <p class="muted" style="margin:0 0 4px;">Endpoints &nbsp;<%= activeCount %> / <%= totalCount %> active</p>
     <p class="muted" style="margin:0;">📅 <%= daysLeftText %>&nbsp;&nbsp;📊 <%= usageLeftText %></p>
 
     <label style="margin-top:18px;">Subscription URL</label>
-    <p class="muted" style="margin:0 0 6px;">Paste this into your VPN client app. This same link also opens this page when viewed in a browser.</p>
     <div class="link-box">
       <code id="sub-raw" tabindex="0" role="button" aria-label="Copy subscription URL to clipboard" title="Click to copy" onclick="copyLink('sub-raw')"><%= subLink %></code>
       <button type="button" class="btn btn-small qr-icon-btn" title="Show QR" aria-label="Show QR code for subscription URL" onclick="showQr('sub-raw')"><%- qrIconSvg %></button>
@@ -24,11 +30,6 @@
 
   <div class="card">
     <h2 style="margin-bottom:6px;">Available Links</h2>
-    <p class="muted" style="margin-top:0;">
-      Each card below is a different way to connect. They all lead to
-      the same place -- having several improves reliability if network
-      conditions change. Tap a card to see the technical details.
-    </p>
 
     <% endpoints.forEach((ep) => { %>
       <details class="endpoint-card">
@@ -50,37 +51,29 @@
           <div class="detail-row">
             <div class="detail-label">Core</div>
             <div class="detail-value"><%= ep.core %></div>
-            <div class="detail-explain"><%= explainField('core') %></div>
           </div>
           <div class="detail-row">
             <div class="detail-label">Protocol</div>
             <div class="detail-value"><%= ep.protocol %></div>
-            <div class="detail-explain"><%= explainField('protocol') %></div>
           </div>
           <div class="detail-row">
             <div class="detail-label">Transport</div>
             <div class="detail-value"><%= ep.transport %></div>
-            <div class="detail-explain"><%= explainField('transport') %></div>
           </div>
           <div class="detail-row">
             <div class="detail-label">Security</div>
             <div class="detail-value">TLS</div>
-            <div class="detail-explain"><%= explainField('security') %></div>
           </div>
           <div class="detail-row">
             <div class="detail-label">Status</div>
             <div class="detail-value">
               <%= ep.health.status %><% if (ep.health.latencyMs !== null && ep.health.latencyMs !== undefined) { %> &mdash; <%= ep.health.latencyMs %>ms<% } %>
             </div>
-            <div class="detail-explain"><%= explainField('status') %></div>
           </div>
         </div>
 
         <% if (ep.variantCount > 1) { %>
-          <p class="muted" style="margin:12px 0 0; font-size:12px;">
-            <%= ep.variantCount %> connection variants available (different ALPN/fingerprint combinations)
-            in the full subscription feed above.
-          </p>
+          <p class="muted" style="margin:12px 0 0; font-size:12px;"><%= ep.variantCount %> variants in the full feed above.</p>
         <% } %>
       </details>
     <% }) %>

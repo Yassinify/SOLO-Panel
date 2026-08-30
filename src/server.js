@@ -18,7 +18,7 @@ const { attachProxy } = require('./xray/proxy');
 const statsPoller = require('./xray/statsPoller');
 const healthMonitor = require('./healthMonitor');
 const { getAllHealth } = require('./health');
-const { formatBytes, QR_ICON_SVG, regionFlag, regionName, currentRegion, explainField } = require('./utils');
+const { formatBytes, QR_ICON_SVG, currentRegion } = require('./utils');
 const { MODE_DIMENSIONS, getModeState, setModeState, isRowEnabled, emptyDimensions, labelForMode, getEnabledAlpnValues, getEnabledFingerprints } = require('./modes');
 const { getLimits, setLimits, getUsageSummary } = require('./subscriptionLimits');
 
@@ -129,14 +129,13 @@ function sendSubscriptionPanel(req, res, subId) {
     loggedIn: false,
     subId,
     subLink: `${req.protocol}://${req.get('host')}/sub/${subId}`,
-    location: `${regionFlag()} ${regionName()}`.trim(),
+    location: currentRegion(),
     endpoints,
     activeCount,
     totalCount: endpoints.length,
     systemStatus,
     daysLeftText: usageSummary.unlimitedDays ? 'Unlimited' : `${usageSummary.daysLeft} Days`,
     usageLeftText: usageSummary.unlimitedUsage ? 'Unlimited' : `${formatBytes(usageSummary.usageUsedBytes)} / ${usageSummary.usageTotalGB} GB`,
-    explainField,
     qrIconSvg: QR_ICON_SVG,
   });
 }
