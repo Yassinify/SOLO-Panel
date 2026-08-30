@@ -1,18 +1,14 @@
-// Builds an Xray-core JSON config from `inbounds` DB rows. Every
-// inbound is one (protocol x transport) combo (see
-// docs/how-program-work.md) listening on an internal 127.0.0.1 port
-// with `security: none` — Railway's edge terminates TLS for us and
-// forwards plain HTTP, and `src/xray/proxy.js` routes matching
-// WS/XHTTP/HTTPUpgrade requests on Railway's single public port to
-// the right internal port by path.
-// Pure functions only — no DB access, no process spawning.
+// Builds an Xray-core JSON config from `inbounds` DB rows. Each
+// inbound listens on an internal 127.0.0.1 port with security: none
+// -- Railway's edge terminates TLS; xray/proxy.js routes matching
+// requests on the single public port to the right internal port.
+// Pure functions only -- no DB access, no process spawning.
 'use strict';
 
 const INTERNAL_PORT_BASE = 10000;
 
-// Fixed internal loopback port for Xray's Stats API (dokodemo-door +
-// gRPC/API service). Chosen well below INTERNAL_PORT_BASE so it never
-// collides with a per-inbound port (10000 + inbound.id).
+// Fixed internal loopback port for Xray's Stats API, below
+// INTERNAL_PORT_BASE so it never collides with a per-inbound port.
 const STATS_API_PORT = 10085;
 
 function internalPortForInbound(inboundId) {
@@ -23,11 +19,8 @@ function statsTagForClient(inboundId) {
   return `client-${inboundId}`;
 }
 
-/**
- * Build a single Xray inbound object from one `inbounds` row. Always
- * binds 127.0.0.1 — never reached directly, only via the internal
- * request proxy in `src/xray/proxy.js` (see module header above).
- */
+// Build a single Xray inbound object from one `inbounds` row. Always
+// binds 127.0.0.1 -- only reached via xray/proxy.js's request proxy.
 function buildInbound(inboundRow) {
   const streamSettings = { network: inboundRow.transport, security: 'none' };
   if (inboundRow.transport === 'ws') {
@@ -38,14 +31,10 @@ function buildInbound(inboundRow) {
   } else if (inboundRow.transport === 'httpupgrade') {
     streamSettings.httpupgradeSettings = { path: inboundRow.path };
   } else if (inboundRow.transport === 'raw') {
-    // Plain TCP disguised as an HTTP request (header.type: 'http') so it
-    // looks like ordinary traffic on the wire; src/xray/proxy.js hijacks
-    // the raw socket for matching requests instead of buffering them like
-    // xhttp, since after this fake header the stream is full-duplex raw
-    // bytes, not request/response HTTP. `request.path` is matched
-    // literally against what the client sends, so it's kept in sync with
-    // the generated path's pathname (query string dropped — Xray's own
-    // header check only looks at the path segment).
+    // Plain TCP disguised as an HTTP request so it looks like ordinary
+    // traffic on the wire; xray/proxy.js hijacks the raw socket for
+    // matching requests instead of buffering them like xhttp. Query
+    // string is dropped since Xray's header check only checks the path.
     streamSettings.rawSettings = {
       header: {
         type: 'http',
@@ -79,18 +68,13 @@ function buildInbound(inboundRow) {
   };
 }
 
-/**
- * Build the full Xray config object.
- * @param {Array} inboundRows - rows from the `inbounds` table (all
- *   rows are always active — there is no enabled/disabled flag).
- */
+// Build the full Xray config object. `inboundRows` are always all active.
 function buildXrayConfig(inboundRows) {
   return {
     log: { loglevel: 'warning' },
-    // Stats API: exposes per-client/per-inbound traffic counters over
-    // gRPC on an internal-only loopback port. Queried via the `xray
-    // api statsquery` CLI subcommand (see src/xray/stats.js) — no
-    // separate gRPC client library needed in Node.
+    // Stats API: per-client/per-inbound traffic counters over gRPC on
+    // an internal loopback port, queried via `xray api statsquery`
+    // (see xray/stats.js).
     api: {
       tag: 'api',
       services: ['StatsService'],

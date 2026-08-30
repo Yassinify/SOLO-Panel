@@ -1,19 +1,13 @@
 // Builds every client-facing share link for one `inbounds` DB row.
-//
-// TLS is terminated by Railway's edge, not xray-core (see
-// docs/how-program-work.md), so every link uses `security=tls` on the
-// single public port 443, and the ALPN/fingerprint values are purely
-// client-side hints for the client's own outbound TLS handshake with
-// that edge — they don't need to match anything xray-core is doing.
-// That means a single inbound row (one protocol/transport pair, one
-// set of credentials) fans out into one link per (ALPN x fingerprint)
-// combination, all pointing at the exact same server/path/identity.
+// TLS is terminated by Railway's edge, not xray-core, so every link
+// uses security=tls on the public port 443 -- ALPN/fingerprint are
+// client-side hints only, they don't need to match xray-core config.
+// One inbound row fans out into one link per (ALPN x fingerprint) combo.
 'use strict';
 
 const { ALPN_VARIANTS, FINGERPRINTS, regionFlag } = require('../utils');
 
-// Railway gives every service one HTTPS domain on the standard port;
-// see docs/how-program-work.md for why other ports were ruled out.
+// Railway gives every service one HTTPS domain on the standard port.
 const EXTERNAL_PORT = 443;
 
 const FINGERPRINT_LABELS = {
@@ -31,11 +25,8 @@ function labelForInbound(inbound) {
   return `${inbound.protocol.toUpperCase()} / ${inbound.transport.toUpperCase()}`;
 }
 
-// Per-link remark, e.g. "\ud83c\uddfa\ud83c\uddf8 VLESS - WS - http/1.1 - Chrome". Ports are
-// never included — every generated link always uses the fixed
-// EXTERNAL_PORT (443), so it'd be redundant. Prefixed with the
-// deployment's Railway-region country flag when known (see
-// utils.js's regionFlag()).
+// Per-link remark, e.g. "🇺🇸 VLESS - WS - http/1.1 - Chrome". Port is
+// never included -- every link uses the fixed EXTERNAL_PORT (443).
 function remarkFor(inbound, alpn, fingerprint) {
   const fpLabel = FINGERPRINT_LABELS[fingerprint] || fingerprint;
   const flag = regionFlag();
@@ -43,21 +34,15 @@ function remarkFor(inbound, alpn, fingerprint) {
   return `${prefix}${inbound.protocol.toUpperCase()} - ${inbound.transport.toUpperCase()} - ${alpn} - ${fpLabel}`;
 }
 
-// Query params shared by vless/trojan (vmess uses its own base64 JSON
-// blob, and shadowsocks uses a `plugin=` value — see buildVmessLink /
-// buildShadowsocksLink below).
+// Query params shared by vless/trojan.
 function buildTransportParams(inbound, alpn, fingerprint, host) {
-  // Client apps' share-link parsers use the pre-rename "tcp" as the
-  // `type` value for this transport, not Xray-core's own JSON-config
-  // alias "raw" (Xray-core v24.9.30+ renamed the "tcp" transport to
-  // "raw" server-side, but that rename was never carried into the
-  // client-facing URI convention -- every real-world example link
-  // still uses type=tcp). See docs/problem.md for the research trail.
+  // Client apps' share-link parsers still use the pre-rename "tcp" as
+  // the `type` value for this transport, not Xray-core's own "raw"
+  // JSON-config alias.
   const linkTransportType = inbound.transport === 'raw' ? 'tcp' : inbound.transport;
   // VLESS URIs require an explicit `encryption` field (always 'none'
-  // for VLESS -- xray-core's own transport-layer TLS handles
-  // encryption, this field is a VLESS protocol-URI requirement, not a
-  // real encryption toggle). Trojan URIs don't use this field at all.
+  // -- xray-core's transport-layer TLS handles encryption). Trojan
+  // URIs don't use this field.
   const paramsObj = inbound.protocol === 'vless' ? { encryption: 'none' } : {};
   Object.assign(paramsObj, {
     type: linkTransportType,
@@ -73,74 +58,40 @@ function buildTransportParams(inbound, alpn, fingerprint, host) {
     params.set('mode', 'auto');
   }
   if (inbound.transport === 'raw') {
-    // Tells the client to send the fake HTTP request line/headers
-    // camouflage matching xray/config.js's rawSettings.header.type
-    // 'http' -- without this the client defaults to no HTTP
-    // camouflage and never sends the request line src/xray/proxy.js's
-    // handleConnection() sniffs for, so the connection never matches
-    // any inbound server-side.
+    // Tells the client to send the fake HTTP camouflage request,
+    // matching xray/config.js's rawSettings -- otherwise the client
+    // never sends the request line xray/proxy.js sniffs for.
     params.set('headerType', 'http');
   }
   return params;
 }
 
-// Some (transport x ALPN x fingerprint) combinations never establish
-// a working connection in practice (confirmed by real-world client
-// testing, not a guess -- see docs/problem.md for the investigation):
-//   - xhttp's browser-named fingerprints (chrome/firefox/safari/ios)
-//     each carry a fixed uTLS ALPN template that conflicts with a
-//     plain `http/1.1` ALPN request; the android template conflicts
-//     with any ALPN that includes h2.
-// These are inherent client/protocol-level incompatibilities, not
-// something this app's server-side config can fix -- so the broken
-// combination is simply never generated as a link anywhere (dashboard,
-// Subscription Panel, raw feed all share buildLinksForInbound below).
-// (ws/httpupgrade + the combined `h2,http/1.1` ALPN used to be listed
-// here too, but that turned out to be a real, fixable bug -- see
-// buildQueryString() below -- not an inherent incompatibility.)
+// Some (transport x ALPN x fingerprint) combinations never connect
+// in practice (confirmed by real client testing):
+//   - xhttp's browser fingerprints conflict with plain http/1.1 ALPN;
+//     the android fingerprint conflicts with h2.
+// So the broken combination is never generated as a link anywhere.
 function isBrokenCombo(transport, alpn, fingerprint) {
   if (transport === 'xhttp') {
     if (alpn === 'http/1.1' && ['chrome', 'firefox', 'safari', 'ios'].includes(fingerprint)) {
       return true;
     }
-    if ((alpn === 'h2' || alpn === 'h2,http/1.1') && fingerprint === 'android') {
+    if (alpn === 'h2' && fingerprint === 'android') {
       return true;
     }
   }
   return false;
 }
 
-// URLSearchParams.toString() percent-encodes every reserved character
-// in a value, including ',' (as %2C) and '/' (as %2F). That's correct
-// per RFC 3986, but several real client apps' own share-link parsers
-// split a multi-value ALPN param on a literal ',' character *before*
-// percent-decoding it -- so an encoded comma (as in the combined
-// `h2,http/1.1` ALPN value) never gets split into two protocols, and
-// the client ends up offering one garbled, unrecognized ALPN string
-// instead of two valid ones, breaking the handshake. Confirmed via a
-// side-by-side comparison of a working `alpn=h2` link (no comma, no
-// problem) against a broken `alpn=h2%2Chttp%2F1.1` link the user
-// generated from this exact app -- see docs/problem.md. Undoing just
-// the comma-encoding (not the slash -- `alpn=h2` alone already proves
-// client apps handle %2F fine) fixes this without touching anything
-// else about the link.
-function buildQueryString(params) {
-  return params.toString().replace(/%2C/g, ',');
-}
-
-/**
- * Build one share link for one (inbound row x ALPN x fingerprint)
- * combination. Returns null if `externalHost` isn't known yet (should
- * not normally happen -- Railway always provides a domain), or if this
- * combination is a known-broken one (see isBrokenCombo above).
- */
+// Build one share link for one (inbound row x ALPN x fingerprint)
+// combo. Returns null if externalHost is unknown or the combo is broken.
 function buildOneLink({ inbound, externalHost, alpn, fingerprint }) {
   if (!externalHost) return null;
   if (isBrokenCombo(inbound.transport, alpn, fingerprint)) return null;
 
   const remark = remarkFor(inbound, alpn, fingerprint);
 
-  const params = buildQueryString(buildTransportParams(inbound, alpn, fingerprint, externalHost));
+  const params = buildTransportParams(inbound, alpn, fingerprint, externalHost).toString();
   const encodedRemark = encodeURIComponent(remark);
 
   if (inbound.protocol === 'vless') {
@@ -152,15 +103,9 @@ function buildOneLink({ inbound, externalHost, alpn, fingerprint }) {
   return null;
 }
 
-/**
- * Every link variant for one inbound row: one (ALPN x fingerprint)
- * link per combination.
- *
- * `alpnValues`/`fingerprints` default to every variant, but callers
- * pass the admin's currently-enabled subsets (src/modes.js's
- * getEnabledAlpnValues()/getEnabledFingerprints()) so a disabled ALPN
- * or fingerprint mode stops being offered anywhere links get built.
- */
+// Every link variant for one inbound row (one per ALPN x fingerprint
+// combo). alpnValues/fingerprints default to every variant; callers
+// normally pass the admin's currently-enabled subsets (modes.js).
 function buildLinksForInbound({ inbound, externalHost, alpnValues = ALPN_VARIANTS, fingerprints = FINGERPRINTS }) {
   if (!externalHost) return [];
 
@@ -174,25 +119,18 @@ function buildLinksForInbound({ inbound, externalHost, alpnValues = ALPN_VARIANT
   return links;
 }
 
-/** Every link variant for every inbound row — the full subscription content. */
+// Every link variant for every inbound row -- the full subscription content.
 function buildAllClientLinks(inboundRows, externalHost, alpnValues = ALPN_VARIANTS, fingerprints = FINGERPRINTS) {
   return inboundRows.flatMap((inbound) => buildLinksForInbound({ inbound, externalHost, alpnValues, fingerprints }));
 }
 
-/**
- * A non-functional "informational" entry, included in the raw
- * subscription feed only (see server.js's sendRawSubscription()), so
- * a client app's own server list shows the current days-left/usage-
- * left figures directly -- without the user needing to open the
- * Subscription Web Panel. Deliberately points at the local loopback
- * address (127.0.0.1:443): this entry is never meant to actually be
- * connected to, only its remark carries meaning. Uses vless (the
- * simplest URI shape) with a fixed all-zero dummy UUID -- same one
- * for every deployment, since it's not tied to any real credential.
- */
+// Non-functional "informational" entry for the raw subscription feed
+// only, so a client app's server list shows days-left/usage-left
+// directly. Points at 127.0.0.1:443 (never meant to be connected to)
+// with a fixed all-zero dummy UUID.
 function buildUsageInfoLink(remark) {
   const params = new URLSearchParams({ encryption: 'none', security: 'none', type: 'tcp' });
   return `vless://00000000-0000-0000-0000-000000000000@127.0.0.1:443?${params}#${encodeURIComponent(remark)}`;
 }
 
-module.exports = { buildAllClientLinks, buildLinksForInbound, buildUsageInfoLink, labelForInbound, EXTERNAL_PORT };
+module.exports = { buildAllClientLinks, buildLinksForInbound, buildUsageInfoLink, labelForInbound };

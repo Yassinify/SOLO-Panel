@@ -49,9 +49,9 @@ function queryStats() {
 }
 
 /**
- * Parse a raw stats map (from queryStats) into per-client uplink/downlink
- * totals, keyed by the numeric `inbound_clients.id` (Xray's "email" tag
- * is set to `client-<id>` by config.js's statsTagForClient()).
+ * Parse a raw stats map (from queryStats) into per-inbound uplink/downlink
+ * totals, keyed by the numeric `inbounds.id` (Xray's "email" tag is
+ * set to `client-<id>` by config.js's statsTagForClient()).
  * @param {Object<string, number>} rawStats
  * @returns {Map<number, {uplink: number, downlink: number}>}
  */

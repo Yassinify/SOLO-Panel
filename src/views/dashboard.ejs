@@ -43,24 +43,11 @@
 
   <div class="card">
     <h2 style="margin-bottom:4px;">Advanced: modes &amp; limits</h2>
-    <p class="muted" style="margin-top:0;">
-      One Apply Changes button saves both sections below together.
-    </p>
 
     <form method="POST" action="/settings/advanced" id="advancedForm">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
       <h3 style="margin-bottom:4px;">Modes</h3>
-      <p class="muted" style="margin-top:0;">
-        Turn individual modes off if you don't want them offered at all.
-        Only one representative combination is on by default (VLESS,
-        WebSocket, HTTP/1.1, Chrome) -- every other
-        combination is still generated and one click away here. Each
-        section needs at least one option enabled at all times. If any
-        mode changes, applying restarts the affected proxy engines, so
-        give it a few seconds, then update your subscription in your
-        client app.
-      </p>
       <% Object.entries(modeDimensions).forEach(([dimension, values]) => { %>
         <label style="text-transform: capitalize;"><%= dimension %></label>
         <div class="mode-grid">
@@ -76,11 +63,6 @@
       <hr class="section-divider">
 
       <h3 style="margin-bottom:4px;">Time &amp; usage limits</h3>
-      <p class="muted" style="margin-top:0;">
-        Optionally cap this subscription to a number of days and/or a
-        total data amount (defaults to 30 days / 80 GB). Leave a field
-        blank for unlimited. Applying restarts the countdown from now.
-      </p>
       <div class="form-row">
         <div style="flex:1; min-width:140px;">
           <label>Days</label>
@@ -213,12 +195,13 @@
     document.getElementById('confirm-modal').classList.remove('open');
   }
 
-  let qrInstance = null;
   function showQr(elementId) {
     const text = document.getElementById(elementId).textContent;
     const holder = document.getElementById('qr-canvas');
     holder.innerHTML = '';
-    qrInstance = new QRCode(holder, {
+    // Result isn't kept -- holder.innerHTML is cleared above instead
+    // of calling QRCode's own .clear()/.makeCode() on a stored instance.
+    new QRCode(holder, {
       text: text,
       width: 220,
       height: 220,

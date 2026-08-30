@@ -1,11 +1,6 @@
 // Manages the xray-core binary as a child process: writes a generated
-// config to disk, then starts/stops/restarts xray with it. No routes
-// or UI wiring here yet — that comes in a later step, once we also
-// decide how the xray-core binary gets onto the Railway image (a
-// separate step; XRAY_BIN_PATH is a placeholder env var for now).
-//
-// See docs/how-program-work.md for the single-port-sharing design:
-// xray-core here only ever listens on internal loopback ports.
+// config to disk, then starts/stops/restarts xray with it. xray-core
+// only ever listens on internal loopback ports here.
 'use strict';
 
 const path = require('path');
@@ -29,10 +24,8 @@ function writeConfig(config) {
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
 }
 
-/**
- * Start xray-core with the given config object. No-op if already running
- * (call restart() to apply a new config to a running instance).
- */
+// Start xray-core with the given config. No-op if already running
+// (call restart() to apply a new config to a running instance).
 function start(config) {
   if (isRunning()) {
     console.warn('xray-core already running; call restart() to apply a new config.');
@@ -63,10 +56,7 @@ function start(config) {
   });
 }
 
-/**
- * Stop xray-core if running. Returns a promise that resolves once the
- * process has actually exited.
- */
+// Stop xray-core if running. Resolves once the process has exited.
 function stop() {
   return new Promise((resolve) => {
     if (!isRunning()) {
@@ -78,9 +68,7 @@ function stop() {
   });
 }
 
-/**
- * Stop the running instance (if any) and start again with a new config.
- */
+// Stop the running instance (if any) and start again with a new config.
 async function restart(config) {
   await stop();
   start(config);

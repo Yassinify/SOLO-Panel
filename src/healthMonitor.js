@@ -1,9 +1,6 @@
 // Periodically checks every generated inbound's reachability and
-// records the result into src/health.js (see docs/product-vision.md
-// rule 10: automatic health monitoring). Same shape as
-// xray/statsPoller.js -- started/stopped alongside the HTTP server.
-// Also feeds each core's health-check result into src/recovery.js
-// (vision rule 11: automatic recovery) -- see isCoreHealthy() below.
+// records the result into health.js. Also feeds each core's health
+// check into recovery.js. Same shape as xray/statsPoller.js.
 'use strict';
 
 const net = require('net');
@@ -19,14 +16,8 @@ const CONNECT_TIMEOUT_MS = 3000;
 
 let timer = null;
 
-/**
- * TCP-connect to one inbound's internal port and measure how long it
- * takes to establish the connection. This only proves the owning
- * core's listener is accepting connections on that port -- it is not
- * a full protocol handshake -- but that's the same signal a client's
- * very first connection attempt depends on, and is cheap enough to
- * run on every generated endpoint every poll cycle.
- */
+// TCP-connect to one inbound's internal port and measure latency.
+// Only proves the listener accepts connections, not a full handshake.
 function checkPort(port) {
   return new Promise((resolve) => {
     const start = Date.now();
@@ -45,29 +36,21 @@ function checkPort(port) {
 }
 
 async function pollOnce() {
-  // Cache each core's own healthCheck() result for this poll cycle
-  // (one call per core, not one per row) -- rows whose owning core
-  // isn't healthy are marked failed without bothering to TCP-connect,
-  // since the port won't be listening anyway.
+  // Cache each core's healthCheck() result per poll cycle (one call
+  // per core, not per row).
   const coreHealthCache = new Map();
 
   async function isCoreHealthy(coreName) {
     if (coreHealthCache.has(coreName)) return coreHealthCache.get(coreName);
     const result = await getCore(coreName).healthCheck();
-    // Every health check doubles as the "Validate / Health Check" step
-    // of the previous cycle's recovery attempt (see src/recovery.js's
-    // header) -- feeding the result in here means automatic recovery
-    // needs no poll loop of its own.
+    // Feeds automatic recovery -- see recovery.js.
     await reportCoreHealth(coreName, result.healthy);
     coreHealthCache.set(coreName, result.healthy);
     return result.healthy;
   }
 
-  // Skip rows whose mode has been disabled (src/modes.js) -- their
-  // owning core was never asked to listen on that port (see
-  // inbounds.js#reloadCore), so probing it would just record a false
-  // "unavailable" for something the admin deliberately turned off.
-  // Left at 'unknown' in health.js instead.
+  // Skip rows whose mode is disabled (modes.js) -- their port was
+  // never opened, so left at 'unknown' instead of probed.
   const modeState = getModeState();
   for (const row of inbounds.listInbounds()) {
     if (!isRowEnabled(row, modeState)) continue;

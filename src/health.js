@@ -1,9 +1,5 @@
-// In-memory health state for each generated inbound (see
-// docs/product-vision.md rule 10: automatic health monitoring).
-// Transient runtime data only, not persisted to the DB -- it
-// naturally re-derives itself a few poll cycles after any restart,
-// same reasoning as why xray/manager.js's process handle isn't
-// persisted either.
+// In-memory health state for each generated inbound. Not persisted
+// to the DB — re-derives itself after a restart.
 'use strict';
 
 // Consecutive failures before an endpoint is considered fully
@@ -30,7 +26,7 @@ function getOrInit(inboundId) {
   return entry;
 }
 
-/** Record a successful reachability check (TCP connect succeeded). */
+// Record a successful reachability check.
 function recordSuccess(inboundId, latencyMs) {
   const entry = getOrInit(inboundId);
   entry.lastSuccess = Date.now();
@@ -40,7 +36,7 @@ function recordSuccess(inboundId, latencyMs) {
   entry.totalSuccesses += 1;
 }
 
-/** Record a failed reachability check (connect refused/timed out, or the owning core isn't running). */
+// Record a failed reachability check.
 function recordFailure(inboundId) {
   const entry = getOrInit(inboundId);
   entry.lastFailure = Date.now();
@@ -48,15 +44,7 @@ function recordFailure(inboundId) {
   entry.totalChecks += 1;
 }
 
-/**
- * Derive a status label from one inbound's recorded state:
- *   - 'unknown'     no check has run yet
- *   - 'healthy'     most recent check succeeded
- *   - 'degraded'    currently failing, but under the Unavailable
- *                   threshold (or has failed at least once recently
- *                   even though the latest check succeeded)
- *   - 'unavailable' consecutive failures reached the threshold
- */
+// Derive a status label: unknown / healthy / degraded / unavailable.
 function statusFor(entry) {
   if (entry.totalChecks === 0) return 'unknown';
   if (entry.failureCount >= UNAVAILABLE_AFTER_FAILURES) return 'unavailable';
@@ -64,7 +52,7 @@ function statusFor(entry) {
   return 'healthy';
 }
 
-/** Public snapshot for one inbound: status label + the raw counters. */
+// Public snapshot for one inbound: status label + raw counters.
 function getHealth(inboundId) {
   const entry = state.get(inboundId);
   if (!entry) {
@@ -87,7 +75,7 @@ function getHealth(inboundId) {
   };
 }
 
-/** Snapshot for every inbound that has ever been checked, keyed by id. */
+// Snapshot for every checked inbound, keyed by id.
 function getAllHealth() {
   const result = {};
   for (const id of state.keys()) {

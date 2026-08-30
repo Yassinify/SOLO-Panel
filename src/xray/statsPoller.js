@@ -2,10 +2,9 @@
 // src/cores/index.js) and persists per-client traffic deltas into the
 // DB via inbounds.addClientTraffic(). Kept separate from server.js to
 // keep route wiring focused; started/stopped alongside the HTTP
-// server's lifecycle. Core-agnostic on purpose (docs/product-vision.md
-// rule 6) — sing-box's getStats() currently always returns an empty
-// map (see cores/singboxCore.js), so this is a harmless no-op for it
-// today, but nothing here needs to change if that's implemented later.
+// server's lifecycle. Core-agnostic on purpose — loops over every
+// registered core (currently xray only) instead of hardcoding one,
+// so a future additional core needs no change here.
 'use strict';
 
 const inbounds = require('../inbounds');

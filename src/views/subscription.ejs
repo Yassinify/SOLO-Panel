@@ -120,12 +120,13 @@
     }
   });
 
-  let qrInstance = null;
   function showQr(elementId) {
     const text = document.getElementById(elementId).textContent;
     const holder = document.getElementById('qr-canvas');
     holder.innerHTML = '';
-    qrInstance = new QRCode(holder, {
+    // Result isn't kept -- holder.innerHTML is cleared above instead
+    // of calling QRCode's own .clear()/.makeCode() on a stored instance.
+    new QRCode(holder, {
       text: text,
       width: 220,
       height: 220,

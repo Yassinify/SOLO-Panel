@@ -117,11 +117,15 @@ h2 { font-size: 19px; }
   background: var(--surface-alt);
   color: var(--text);
   cursor: pointer;
+  /* 44px is the standard minimum touch-target size -- applied at
+     every screen size (not just mobile) since tablets and touch
+     laptops need it too, and it doesn't hurt mouse-driven desktop use. */
+  min-height: 44px;
 }
 .btn:hover { border-color: var(--accent); text-decoration: none; }
 .btn-accent { background: var(--accent); border-color: var(--accent); color: #06231f; font-weight: 600; }
 .btn-accent:hover { background: var(--accent-strong); border-color: var(--accent-strong); }
-.btn-small { padding: 5px 10px; font-size: 12px; }
+.btn-small { padding: 5px 10px; font-size: 12px; min-height: 40px; }
 
 /* "Apply Changes" (mode toggles) -- deliberately NOT a solid accent
    fill like .btn-accent or a selected .mode-toggle chip, since a
@@ -169,7 +173,10 @@ input[type=text], input[type=password], input[type=number], select {
   border-radius: var(--radius);
   color: var(--text);
   font-family: var(--font-body);
-  font-size: 14px;
+  /* 16px, not smaller: any focused input under 16px makes iOS Safari
+     auto-zoom the whole page, on a phone or a tablet -- applied at
+     every screen size so it can never regress on any device. */
+  font-size: 16px;
 }
 input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 
@@ -233,6 +240,9 @@ input[type=number] { -moz-appearance: textfield; }
   justify-content: center;
   padding: 6px;
   line-height: 0;
+  /* Same 44px minimum touch target as .btn, at every screen size. */
+  min-width: 44px;
+  min-height: 44px;
 }
 .qr-icon-btn svg { width: 18px; height: 18px; display: block; }
 
@@ -353,10 +363,11 @@ input[type=number] { -moz-appearance: textfield; }
      for phones only; desktop/tablet sizing is unchanged. */
   .card { padding: 20px; }
   .location-flag { width: 34px; height: 26px; }
-  .qr-icon-btn { padding: 10px; }
+  .qr-icon-btn { padding: 12px; }
   .qr-icon-btn svg { width: 22px; height: 22px; }
   .btn { padding: 13px 22px; font-size: 15px; }
   .btn-small { padding: 8px 14px; font-size: 13px; }
+  .mode-toggle { padding: 10px 16px; }
 
   /* Force the Location/Subscription URL row to stack on phones via an
      explicit rule instead of relying on flex-wrap's own min-width
@@ -485,6 +496,8 @@ input[type=number] { -moz-appearance: textfield; }
   cursor: pointer;
   user-select: none;
   transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  /* Same 44px minimum touch target as .btn, at every screen size. */
+  min-height: 44px;
 }
 .mode-toggle:hover { border-color: var(--accent); }
 .mode-toggle.selected {

@@ -1,12 +1,7 @@
 // Data-access layer for inbounds, plus a helper to reload xray-core
-// whenever the underlying data changes. Routes should go through this
-// module rather than touching `db` directly, so the "rebuild config +
-// restart xray" step never gets forgotten.
-//
-// There is no admin-facing inbound CRUD. Instead
-// `ensureGeneratedInbounds()` auto-seeds one inbound per supported
-// (protocol x transport) combination, all running behind Railway's
-// own edge TLS on its single public port -- see docs/how-program-work.md.
+// when data changes. Routes go through this module, not `db` directly.
+// No admin-facing CRUD -- ensureGeneratedInbounds() auto-seeds one
+// inbound per supported (protocol x transport) combo.
 'use strict';
 
 const crypto = require('crypto');
@@ -15,15 +10,10 @@ const { getCore, listCores } = require('./cores');
 const { generatePath, generateRawHttpPath } = require('./utils');
 const { getModeState, isRowEnabled } = require('./modes');
 
-// Every (core x protocol x transport) combination this panel
-// generates. Xray-only (sing-box support was removed 2026-08-29 per
-// user request -- see docs/how-program-work.md's Change Log).
-// Credentials are generated once per protocol (not per transport) and
-// reused across every row of that protocol, so a given protocol is
-// one account with many front doors, not a separate identity per
-// transport. Order here is also seeding order, so it determines
-// inbound ids (and therefore each row's internal port -- see
-// xray/config.js).
+// Every (core x protocol x transport) combo this panel generates.
+// Credentials are shared per protocol across transports. Order here
+// is also seeding order, so it determines each row's internal port
+// (see xray/config.js).
 const CORE_COMBOS = {
   xray: {
     protocols: ['vless', 'trojan'],
@@ -39,44 +29,24 @@ function getInbound(id) {
   return db.prepare('SELECT * FROM inbounds WHERE id = ?').get(id);
 }
 
-/**
- * Total uplink+downlink bytes across every generated inbound row.
- * Since every row is just a different front door to the same single
- * installation identity (see product-vision.md rule 19 and this
- * file's CORE_COMBOS comment), this sum is "how much data this
- * subscription has used", used by src/subscriptionLimits.js's usage
- * cap display.
- */
+// Total uplink+downlink bytes across every inbound row -- "how much
+// this subscription has used" (see subscriptionLimits.js).
 function getTotalTrafficBytes() {
   const row = db.prepare('SELECT COALESCE(SUM(up_bytes + down_bytes), 0) AS total FROM inbounds').get();
   return row.total;
 }
 
-/**
- * Delete any `inbounds` row whose `core` value isn't a currently
- * registered core (see src/cores/index.js). Handles leftover rows
- * from a core that used to exist but was later removed from the
- * codebase (e.g. sing-box, removed 2026-08-29) -- those rows are
- * never started by reloadCore() (it filters by core name), but
- * listInbounds() still returns them, so without this cleanup they
- * keep showing up as permanently "unknown"-health cards on the
- * dashboard/Subscription Panel and drag the active/total count down.
- * Safe to run on every boot: a no-op once no such rows remain.
- */
+// Delete `inbounds` rows whose `core` isn't currently registered
+// (leftovers from a removed core). Safe to run every boot.
 function pruneOrphanedCoreRows() {
   const validCores = listCores().map((core) => core.name);
-  if (validCores.length === 0) return; // safety: never wipe everything if cores/index.js is empty
+  if (validCores.length === 0) return; // never wipe everything if cores/index.js is empty
   const placeholders = validCores.map(() => '?').join(',');
   db.prepare(`DELETE FROM inbounds WHERE core NOT IN (${placeholders})`).run(...validCores);
 }
 
-/**
- * Idempotently seed one inbound row per (core x protocol x transport)
- * combo (see CORE_COMBOS above). Credentials are generated once per
- * protocol and reused across every core/transport row of that
- * protocol. Safe to call on every boot: does nothing once all rows
- * already exist.
- */
+// Idempotently seed one row per (core x protocol x transport) combo.
+// Credentials are shared per protocol. No-op once all rows exist.
 function ensureGeneratedInbounds() {
   const expectedCount = Object.values(CORE_COMBOS)
     .reduce((sum, combo) => sum + combo.protocols.length * combo.transports.length, 0);
@@ -118,23 +88,13 @@ function ensureGeneratedInbounds() {
     insertAll();
   }
 
-  // REALITY was removed entirely (2026-08-30, per user request --
-  // attaching its required Railway TCP Proxy broke the main HTTPS
-  // domain with a 502). This one-time cleanup deletes any row a prior
-  // deployment already seeded before that removal; harmless no-op
-  // once none remain. The `reality_*` columns themselves are left in
-  // the `inbounds` schema (see src/db.js) -- same non-destructive
-  // precedent as leaving unused `ss_method`/`ss_password` columns
-  // after removing vmess/shadowsocks.
+  // REALITY was removed entirely (2026-08-30) -- one-time cleanup of
+  // any leftover row from before that removal.
   db.prepare("DELETE FROM inbounds WHERE transport = 'reality'").run();
 }
 
-/**
- * Unguessable token for the single combined subscription URL (see
- * `GET /sub/:subId` in server.js), which returns every configured
- * inbound's client link at once. Generated once and persisted, same
- * pattern as `getOrCreateSessionSecret` in db.js.
- */
+// Unguessable token for the single combined subscription URL
+// (GET /sub/:subId in server.js). Generated once, persisted.
 function getOrCreateGlobalSubscriptionId() {
   const existing = getConfigValue('global_subscription_id');
   if (existing) return existing;
@@ -144,31 +104,15 @@ function getOrCreateGlobalSubscriptionId() {
   return id;
 }
 
-/**
- * Add uplink/downlink byte deltas (from one Stats API poll) onto an
- * inbound's running totals. Called from the polling loop in server.js
- * with values from xray/stats.js's toClientTraffic(); safe to call
- * with an inboundId that no longer exists (no-op, 0 rows affected).
- */
+// Add uplink/downlink byte deltas onto an inbound's running totals.
 function addClientTraffic(inboundId, uplinkDelta, downlinkDelta) {
   db.prepare(
     'UPDATE inbounds SET up_bytes = up_bytes + ?, down_bytes = down_bytes + ? WHERE id = ?'
   ).run(uplinkDelta, downlinkDelta, inboundId);
 }
 
-/**
- * Rebuild one core's config from current DB state (that core's rows
- * only — see CORE_COMBOS) and (re)start it. Called for every
- * registered core on boot (see reloadCores below), and safe to call
- * for a single core after a future targeted change. Every generated
- * row is served unless its mode (protocol/transport) has been
- * explicitly disabled via src/modes.js — a user-requested exception
- * to product-vision.md rules 7/20, see docs/how-program-work.md.
- *
- * Goes through the generic core abstraction (src/cores) instead of
- * a specific core module directly — see docs/product-vision.md rule
- * 6/7.
- */
+// Rebuild one core's config from current DB state and (re)start it.
+// Only rows whose mode is enabled (modes.js) are served.
 async function reloadCore(coreName) {
   const core = getCore(coreName);
   const modeState = getModeState();
@@ -183,13 +127,7 @@ async function reloadCore(coreName) {
   }
 }
 
-/**
- * Reload every registered core (see src/cores/index.js), each with
- * only its own rows. This is what boot (and any future "config
- * changed" trigger) should call — never call a specific core's
- * reload directly, or a second core silently never starts (this was
- * a real bug: see docs/how-program-work.md's sing-box wiring entry).
- */
+// Reload every registered core, each with only its own rows.
 async function reloadCores() {
   for (const core of listCores()) {
     await reloadCore(core.name);

@@ -1,18 +1,12 @@
-// Subscription ordering (see docs/product-vision.md rule 23):
-//
-//   Subscription endpoints should have an automatically determined
-//   priority (Primary -> Secondary -> Fallback), based on health,
-//   latency, availability, and runtime state -- never manually
-//   configured by the admin.
-//
-// Pure sorting logic only, no DB/network access -- reads the existing
-// in-memory snapshots from src/health.js and src/recovery.js.
+// Subscription ordering: rank inbounds Primary -> Secondary ->
+// Fallback based on health, latency, and recovery state.
+// Pure sorting logic -- reads in-memory snapshots from health.js/recovery.js.
 'use strict';
 
 const { getHealth } = require('./health');
 const { isDeprioritized } = require('./recovery');
 
-// Lower rank = higher priority. Matches vision rule 10's four states.
+// Lower rank = higher priority.
 const STATUS_RANK = {
   healthy: 0,
   degraded: 1,
@@ -20,19 +14,9 @@ const STATUS_RANK = {
   unavailable: 3,
 };
 
-/**
- * Sort inbound rows into priority order (does not mutate the input
- * array). Rows whose owning core is currently deprioritized by
- * automatic recovery (src/recovery.js, vision rule 11) always sort
- * after every non-deprioritized row, regardless of their own health --
- * a row that only happens to look healthy this cycle is still served
- * by a core recovery has already given up restarting for now.
- *
- * Within each of those two groups, sort by health status rank
- * (healthy first, then degraded, then unknown, then unavailable),
- * then by measured latency ascending (rows with no latency reading
- * yet sort after rows that have one, within the same status).
- */
+// Sort inbound rows into priority order (doesn't mutate input).
+// Deprioritized-core rows sort last regardless of their own health.
+// Otherwise: by health status rank, then by latency ascending.
 function orderInbounds(rows) {
   return [...rows].sort((a, b) => {
     const aDeprioritized = isDeprioritized(a.core) ? 1 : 0;

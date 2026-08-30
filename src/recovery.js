@@ -1,15 +1,7 @@
-// Automatic recovery for cores (see docs/product-vision.md rule 11):
-//
-//   Failure -> Detect -> Restart/Repair -> Validate -> Health Check -> Restore
-//
-// Hooked into src/healthMonitor.js's existing per-cycle core health
-// check (see that file) rather than running its own poll loop --
-// every health check IS the "Validate / Health Check" step for
-// whatever the previous cycle did, so no separate loop is needed.
-//
-// In-memory only, same reasoning as src/health.js: this is transient
-// runtime/operational state, not configuration, and naturally
-// re-derives after a restart.
+// Automatic recovery for cores: Failure -> Detect -> Restart ->
+// Validate -> Health Check -> Restore. Hooked into healthMonitor.js's
+// per-cycle health check instead of running its own poll loop.
+// In-memory only, re-derives after a restart.
 'use strict';
 
 const inbounds = require('./inbounds');
@@ -45,13 +37,8 @@ function getOrInit(coreName) {
   return entry;
 }
 
-/**
- * Whether `coreName` is currently deprioritized (vision rule 11: after
- * repeated failed recovery attempts, stop retrying and change
- * priority instead). Clears itself (and resets the attempt count) once
- * the cooldown window has passed, so recovery gets one more try later
- * rather than giving up permanently.
- */
+// Whether `coreName` is currently deprioritized after repeated failed
+// restarts. Clears itself once the cooldown window passes.
 function isDeprioritized(coreName) {
   const entry = state.get(coreName);
   if (!entry || !entry.deprioritizedUntil) return false;
@@ -63,7 +50,7 @@ function isDeprioritized(coreName) {
   return true;
 }
 
-/** Read-only snapshot of one core's recovery state, for logging/future UI. */
+// Read-only snapshot of one core's recovery state (logging/future UI).
 function getRecoveryState(coreName) {
   const entry = state.get(coreName);
   if (!entry) {
@@ -77,11 +64,8 @@ function getRecoveryState(coreName) {
   };
 }
 
-/**
- * Called once per poll cycle (from healthMonitor.js) with the result
- * of `coreName`'s own healthCheck(). Drives the recovery state
- * machine described in this file's header.
- */
+// Called once per poll cycle with the core's healthCheck() result.
+// Drives the recovery state machine described above.
 async function reportCoreHealth(coreName, healthy) {
   const entry = getOrInit(coreName);
 
