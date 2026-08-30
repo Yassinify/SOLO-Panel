@@ -43,6 +43,12 @@ const app = express();
 const server = http.createServer(app);
 
 const PORT = process.env.PORT || 3000;
+// Dedicated port for `raw` transport (see xray/links.js's
+// rawTcpProxyTarget() and xray/proxy.js's handleConnection). Not
+// reached via Railway's shared HTTP domain -- the admin must
+// separately enable Railway's TCP Proxy feature and point its
+// Internal Port at this value (Settings -> Networking -> TCP Proxy).
+const RAW_TCP_PORT = process.env.RAW_TCP_PORT || 8443;
 const HOST = '0.0.0.0';
 
 app.set('view engine', 'ejs');
@@ -281,6 +287,16 @@ tcpServer.listen(PORT, HOST, () => {
   console.log(`SOLO Panel listening on http://${HOST}:${PORT}`);
 });
 
+// Dedicated listener for Railway's TCP Proxy (see RAW_TCP_PORT above)
+// -- true raw TCP passthrough, no HTTP edge in front of it, unlike
+// the shared port above. Reuses the exact same sniff/route logic
+// since `raw` connections still send the same camouflage header.
+const rawTcpServer = net.createServer(handleConnection);
+
+rawTcpServer.listen(RAW_TCP_PORT, HOST, () => {
+  console.log(`SOLO Panel raw-TCP listener on ${HOST}:${RAW_TCP_PORT} (point Railway's TCP Proxy Internal Port here)`);
+});
+
 // Remove leftover inbound rows from a core that no longer exists,
 // then seed the fixed set of auto-generated inbounds (no-op after
 // first boot), then start every registered core.
@@ -301,6 +317,7 @@ async function shutdown() {
   statsPoller.stop();
   healthMonitor.stop();
   await Promise.all(listCores().map((core) => core.stop()));
+  rawTcpServer.close();
   tcpServer.close(() => process.exit(0));
 }
 
