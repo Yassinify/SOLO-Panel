@@ -231,19 +231,6 @@ app.post('/logout', requireCsrf, (req, res) => {
   });
 });
 
-// REALITY needs its own separately-exposed Railway port (can't share
-// 443 with Railway's edge TLS -- see xray/config.js's header), which
-// Railway assigns at TCP-Proxy-attach time and doesn't expose to the
-// app. This is the one setting that's genuinely admin-entered rather
-// than auto-detected -- everything else about REALITY (keypair, short
-// ID, camouflage target) is generated automatically (see
-// inbounds.js's ensureRealityInbound()). Doesn't restart any core --
-// see setRealityExternalAddress's own header.
-app.post('/settings/reality', requireAuth, requireCsrf, (req, res) => {
-  inbounds.setRealityExternalAddress(req.body.reality_address);
-  res.redirect('/');
-});
-
 app.get('/', requireAuth, (req, res) => {
   const externalHost = externalHostFor(req);
   const health = getAllHealth();
@@ -285,22 +272,6 @@ app.get('/', requireAuth, (req, res) => {
   // never configured at all (see README.md's Volume step).
   const dataDirWarning = !process.env.DATA_DIR && !process.env.RAILWAY_VOLUME_MOUNT_PATH;
 
-  // REALITY setup info (src/inbounds.js's ensureRealityInbound()):
-  // the row always exists once the panel has booted at least once,
-  // so this should never be null in practice, but the dashboard view
-  // guards for it anyway rather than assuming.
-  const realityRow = rows.find((r) => r.transport === 'reality');
-  const realityInfo = realityRow
-    ? {
-        internalPort: internalPortForRow(realityRow),
-        publicKey: realityRow.reality_public_key,
-        shortId: realityRow.reality_short_id,
-        dest: realityRow.reality_dest,
-        externalAddress: realityRow.reality_external_address || '',
-        enabled: realityRow.enabled,
-      }
-    : null;
-
   res.render('dashboard', {
     loggedIn: true,
     csrfToken: getOrCreateCsrfToken(req),
@@ -321,7 +292,6 @@ app.get('/', requireAuth, (req, res) => {
     daysLeftText: usageSummary.unlimitedDays ? 'Unlimited' : `${usageSummary.daysLeft} Days`,
     usageLeftText: usageSummary.unlimitedUsage ? 'Unlimited' : formatBytes(usageSummary.usageLeftBytes),
     dataDirWarning,
-    realityInfo,
   });
 });
 

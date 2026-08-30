@@ -29,26 +29,8 @@ function statsTagForClient(inboundId) {
  * request proxy in `src/xray/proxy.js` (see module header above).
  */
 function buildInbound(inboundRow) {
-  const isReality = inboundRow.transport === 'reality';
-  // REALITY isn't a real Xray-core "network" type -- it's raw TCP
-  // (network: 'tcp') with security: 'reality' layered on top, unlike
-  // every other row here which uses security: 'none' because
-  // Railway's edge does the real TLS termination instead of xray-core
-  // (see module header). REALITY is the one exception: xray-core
-  // itself performs the real TLS handshake, so it needs its own
-  // separately-exposed port (see the 0.0.0.0 bind below) rather than
-  // sharing Railway's single edge-terminated port.
-  const streamSettings = { network: isReality ? 'tcp' : inboundRow.transport, security: isReality ? 'reality' : 'none' };
-  if (isReality) {
-    streamSettings.realitySettings = {
-      show: false,
-      dest: `${inboundRow.reality_dest}:443`,
-      xver: 0,
-      serverNames: [inboundRow.reality_dest],
-      privateKey: inboundRow.reality_private_key,
-      shortIds: [inboundRow.reality_short_id],
-    };
-  } else if (inboundRow.transport === 'ws') {
+  const streamSettings = { network: inboundRow.transport, security: 'none' };
+  if (inboundRow.transport === 'ws') {
     streamSettings.wsSettings = { path: inboundRow.path };
   } else if (inboundRow.transport === 'xhttp') {
     // 'auto' lets Xray pick GET (stream-down) vs POST (stream-up) per-request.
@@ -89,11 +71,7 @@ function buildInbound(inboundRow) {
 
   return {
     tag: `inbound-${inboundRow.id}`,
-    // REALITY binds 0.0.0.0 (not 127.0.0.1) because it needs to be
-    // reachable directly by a separately-attached Railway TCP Proxy,
-    // not routed internally through src/xray/proxy.js like every
-    // other transport (see this function's header comment above).
-    listen: isReality ? '0.0.0.0' : '127.0.0.1',
+    listen: '127.0.0.1',
     port: internalPortForInbound(inboundRow.id),
     protocol,
     settings,

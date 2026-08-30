@@ -35,7 +35,7 @@ const { ALPN_VARIANTS, FINGERPRINTS } = require('./utils');
 // getEnabledFingerprints() instead of isRowEnabled().
 const MODE_DIMENSIONS = {
   protocol: ['vless', 'trojan'],
-  transport: ['ws', 'xhttp', 'httpupgrade', 'raw', 'reality'],
+  transport: ['ws', 'xhttp', 'httpupgrade', 'raw'],
   alpn: ALPN_VARIANTS,
   fingerprint: FINGERPRINTS,
 };
@@ -43,12 +43,7 @@ const MODE_DIMENSIONS = {
 // Which value(s) per dimension are enabled the first time this app
 // runs (i.e. before the admin has ever saved a mode change) -- see
 // the module header note above. A value missing from a dimension here
-// defaults to disabled. 'reality' (added 2026-08-29) is deliberately
-// left disabled by default -- unlike every other transport it needs a
-// one-time manual step (attaching a Railway TCP Proxy and saving the
-// assigned address) before it can actually be reached, so it
-// shouldn't turn on for a deployment the admin hasn't configured yet.
-// 'xhttp' (not 'ws', changed 2026-08-30) is the default transport --
+// defaults to disabled. 'xhttp' (not 'ws', changed 2026-08-30) is the default transport --
 // a real Railway deploy log showed xray-core itself printing a
 // deprecation warning for the `ws` transport ("migrate to XHTTP H2 &
 // H3 as soon as possible"), so a fresh deployment's zero-interaction
@@ -76,7 +71,7 @@ function configKey(dimension, value) {
 // "httpupgrade" means to toggle it.
 const MODE_LABELS = {
   protocol: { vless: 'VLESS', trojan: 'Trojan' },
-  transport: { ws: 'WebSocket', xhttp: 'XHTTP', httpupgrade: 'HTTP Upgrade', raw: 'Raw (camouflaged TCP)', reality: 'REALITY (needs setup)' },
+  transport: { ws: 'WebSocket', xhttp: 'XHTTP', httpupgrade: 'HTTP Upgrade', raw: 'Raw (camouflaged TCP)' },
   alpn: { 'http/1.1': 'HTTP/1.1', h2: 'HTTP/2', 'h2,http/1.1': 'HTTP/2 + HTTP/1.1' },
   fingerprint: { chrome: 'Chrome', firefox: 'Firefox', safari: 'Safari', ios: 'iOS', android: 'Android', randomized: 'Randomized' },
 };

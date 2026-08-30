@@ -12,7 +12,7 @@
 const crypto = require('crypto');
 const { db, getConfigValue, setConfigValue } = require('./db');
 const { getCore, listCores } = require('./cores');
-const { generatePath, generateRawHttpPath, generateRealityKeypair, generateShortId, REALITY_DEST } = require('./utils');
+const { generatePath, generateRawHttpPath } = require('./utils');
 const { getModeState, isRowEnabled } = require('./modes');
 
 // Every (core x protocol x transport) combination this panel
@@ -118,61 +118,15 @@ function ensureGeneratedInbounds() {
     insertAll();
   }
 
-  // REALITY is seeded separately (not part of CORE_COMBOS's protocol x
-  // transport matrix -- it's one extra vless row, not a full combo) and
-  // has its own idempotency check, so it still runs even when the
-  // matrix above was already seeded on a prior boot.
-  ensureRealityInbound();
-}
-
-/**
- * Idempotently seed the single REALITY inbound row (protocol vless,
- * transport 'reality'). Reuses the same vless `client_uuid` every
- * other vless row uses -- one account, many front doors, same design
- * as CORE_COMBOS's shared-credentials-per-protocol approach above.
- * REALITY's keypair/short ID/camouflage target are generated once and
- * stored directly on the row so xray/config.js can build its inbound
- * with no DB access of its own. Safe to call on every boot: a no-op
- * once the row already exists.
- */
-function ensureRealityInbound() {
-  const existing = db.prepare("SELECT id FROM inbounds WHERE transport = 'reality'").get();
-  if (existing) return;
-
-  const vlessRow = db.prepare("SELECT client_uuid FROM inbounds WHERE protocol = 'vless' LIMIT 1").get();
-  const clientUuid = vlessRow ? vlessRow.client_uuid : crypto.randomUUID();
-  const { privateKey, publicKey } = generateRealityKeypair();
-  const shortId = generateShortId();
-
-  db.prepare(
-    `INSERT INTO inbounds (
-      core, protocol, transport, path, client_uuid, subscription_id,
-      reality_private_key, reality_public_key, reality_short_id, reality_dest
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).run(
-    'xray',
-    'vless',
-    'reality',
-    '', // no WS-style path -- REALITY is raw TCP, this column is unused for it
-    clientUuid,
-    crypto.randomBytes(16).toString('hex'),
-    privateKey,
-    publicKey,
-    shortId,
-    REALITY_DEST
-  );
-}
-
-/**
- * Save the admin-entered Railway TCP Proxy address ("host:port") that
- * REALITY's share link should point at (see xray/links.js's
- * buildRealityLink()). Doesn't restart any core -- REALITY's xray-core
- * inbound already listens on 0.0.0.0 regardless of whether an
- * external address has been recorded yet; this only changes what the
- * generated link displays.
- */
-function setRealityExternalAddress(address) {
-  db.prepare("UPDATE inbounds SET reality_external_address = ? WHERE transport = 'reality'").run(address);
+  // REALITY was removed entirely (2026-08-30, per user request --
+  // attaching its required Railway TCP Proxy broke the main HTTPS
+  // domain with a 502). This one-time cleanup deletes any row a prior
+  // deployment already seeded before that removal; harmless no-op
+  // once none remain. The `reality_*` columns themselves are left in
+  // the `inbounds` schema (see src/db.js) -- same non-destructive
+  // precedent as leaving unused `ss_method`/`ss_password` columns
+  // after removing vmess/shadowsocks.
+  db.prepare("DELETE FROM inbounds WHERE transport = 'reality'").run();
 }
 
 /**
@@ -248,8 +202,6 @@ module.exports = {
   getTotalTrafficBytes,
   pruneOrphanedCoreRows,
   ensureGeneratedInbounds,
-  ensureRealityInbound,
-  setRealityExternalAddress,
   getOrCreateGlobalSubscriptionId,
   addClientTraffic,
   reloadCore,

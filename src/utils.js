@@ -51,32 +51,6 @@ function generateRawHttpPath() {
 const ALPN_VARIANTS = ['http/1.1', 'h2', 'h2,http/1.1'];
 const FINGERPRINTS = ['chrome', 'firefox', 'safari', 'ios', 'android', 'randomized'];
 
-// REALITY's real-TLS camouflage target: xray-core relays the initial
-// handshake to this real host so an observer sees what looks like an
-// ordinary connection to it. Used both as the `dest` xray-core dials
-// and as the SNI value in client links (see xray/config.js,
-// xray/links.js).
-const REALITY_DEST = 'www.microsoft.com';
-
-/**
- * Generate one REALITY keypair (Curve25519/x25519), returned as the
- * raw 32-byte base64url values xray-core's realitySettings expects
- * (privateKey/publicKey). Node's own JWK export for x25519 keys
- * already produces base64url without padding, matching that format
- * directly -- no manual re-encoding needed.
- */
-function generateRealityKeypair() {
-  const { publicKey, privateKey } = crypto.generateKeyPairSync('x25519');
-  const privateJwk = privateKey.export({ format: 'jwk' });
-  const publicJwk = publicKey.export({ format: 'jwk' });
-  return { privateKey: privateJwk.d, publicKey: publicJwk.x };
-}
-
-/** Random REALITY short ID (xray-core accepts up to 16 hex chars; 8 is a common, sufficiently unguessable length). */
-function generateShortId() {
-  return crypto.randomBytes(4).toString('hex');
-}
-
 // Country flag for the Railway region this deployment is running in,
 // keyed by the `RAILWAY_REPLICA_REGION` env var's region identifier
 // prefix (Railway sets this automatically per deployment — see
@@ -142,9 +116,6 @@ module.exports = {
   generateRawHttpPath,
   ALPN_VARIANTS,
   FINGERPRINTS,
-  REALITY_DEST,
-  generateRealityKeypair,
-  generateShortId,
   regionFlag,
   regionName,
   TECH_EXPLANATIONS,

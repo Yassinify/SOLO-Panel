@@ -30,31 +30,6 @@
   </div>
 
   <div class="card">
-    <h2 style="margin-bottom:4px;">REALITY (optional, advanced)</h2>
-    <p class="muted" style="margin-top:0;">
-      REALITY is a stealthier, real-TLS-handshake connection type. Unlike
-      every other mode above, it can't share this app's single web port --
-      it needs its own separately-exposed port from Railway. One-time setup:
-    </p>
-    <ol class="step-list">
-      <li>In Railway, attach a <strong>TCP Proxy</strong> to this service, pointed at internal port <code><%= realityInfo ? realityInfo.internalPort : '?' %></code>.</li>
-      <li>Railway will assign an external address (e.g. <code>roundhouse.proxy.rlwy.net:12345</code>) -- copy it.</li>
-      <li>Paste it below and save, then enable <strong>REALITY</strong> under Modes &rarr; Transport above and Apply Changes.</li>
-    </ol>
-    <% if (realityInfo) { %>
-      <p class="muted" style="margin:0 0 10px;">
-        Status: <strong><%= realityInfo.externalAddress ? 'Address saved' : 'Not configured yet' %></strong><%= realityInfo.enabled ? ' -- enabled' : ' -- disabled (turn on under Modes then Transport once configured)' %>
-      </p>
-    <% } %>
-    <form method="POST" action="/settings/reality">
-      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-      <label>Railway TCP Proxy address (host:port)</label>
-      <input type="text" name="reality_address" placeholder="roundhouse.proxy.rlwy.net:12345" value="<%= realityInfo ? realityInfo.externalAddress : '' %>">
-      <button type="submit" class="btn btn-block" style="margin-top:12px;">Save Address</button>
-    </form>
-  </div>
-
-  <div class="card">
     <h2 style="margin-bottom:4px;">Advanced: modes &amp; limits</h2>
     <p class="muted" style="margin-top:0;">
       One Apply Changes button saves both sections below together.

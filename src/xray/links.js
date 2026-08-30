@@ -101,36 +101,8 @@ function buildOneLink({ inbound, externalHost, alpn, fingerprint }) {
 }
 
 /**
- * Build a REALITY share link. Unlike every other transport, REALITY
- * doesn't point at Railway's shared 443 -- it needs its own
- * separately-exposed port (see xray/config.js's header), so `host`/
- * `port` come from the admin-entered `reality_external_address`
- * column (Railway TCP Proxy's assigned address), not `externalHost`/
- * `EXTERNAL_PORT`. Fingerprint is still a real lever here (unlike
- * every other transport's link-only `fp=`): xray-core itself performs
- * the real TLS handshake for a `reality` inbound, so the client's
- * uTLS ClientHello shape genuinely matters server-side. No ALPN fan-
- * out -- REALITY's own real TLS handshake negotiates that with the
- * client directly, it isn't a separate link-level hint to vary.
- */
-function buildRealityLink(inbound, fingerprint, host, port, remark) {
-  const params = new URLSearchParams({
-    security: 'reality',
-    encryption: 'none',
-    pbk: inbound.reality_public_key,
-    sid: inbound.reality_short_id,
-    sni: inbound.reality_dest,
-    fp: fingerprint,
-    type: 'tcp',
-  });
-  return `vless://${inbound.client_uuid}@${host}:${port}?${params}#${encodeURIComponent(remark)}`;
-}
-
-/**
  * Every link variant for one inbound row: one (ALPN x fingerprint)
- * link per combination for vless/trojan, or one link per
- * fingerprint (no ALPN fan-out) for the REALITY row (see
- * buildRealityLink above).
+ * link per combination.
  *
  * `alpnValues`/`fingerprints` default to every variant, but callers
  * pass the admin's currently-enabled subsets (src/modes.js's
@@ -139,21 +111,6 @@ function buildRealityLink(inbound, fingerprint, host, port, remark) {
  */
 function buildLinksForInbound({ inbound, externalHost, alpnValues = ALPN_VARIANTS, fingerprints = FINGERPRINTS }) {
   if (!externalHost) return [];
-
-  if (inbound.transport === 'reality') {
-    // Not configured yet (admin hasn't attached a Railway TCP Proxy
-    // and saved its assigned address) -- no usable link to offer.
-    if (!inbound.reality_external_address) return [];
-    const separatorIndex = inbound.reality_external_address.lastIndexOf(':');
-    if (separatorIndex === -1) return []; // malformed "host:port" value, fail safe rather than build a broken link
-    const host = inbound.reality_external_address.slice(0, separatorIndex);
-    const port = inbound.reality_external_address.slice(separatorIndex + 1);
-    const flag = regionFlag();
-    const prefix = flag ? `${flag} ` : '';
-    return fingerprints.map((fingerprint) =>
-      buildRealityLink(inbound, fingerprint, host, port, `${prefix}VLESS - REALITY - ${FINGERPRINT_LABELS[fingerprint] || fingerprint}`)
-    );
-  }
 
   const links = [];
   for (const alpn of alpnValues) {
