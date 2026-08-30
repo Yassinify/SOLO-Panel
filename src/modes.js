@@ -96,4 +96,19 @@ function getEnabledFingerprints(state = getModeState()) {
   return MODE_DIMENSIONS.fingerprint.filter((value) => !!state.fingerprint[value]);
 }
 
-module.exports = { MODE_DIMENSIONS, MODE_LABELS, labelForMode, getModeState, setModeState, isRowEnabled, emptyDimensions, getEnabledAlpnValues, getEnabledFingerprints };
+// Standalone toggle (not a MODE_DIMENSIONS entry -- it's a single
+// on/off flag, not a set of enumerable values). Mirrors Railway's own
+// Settings -> Networking -> "Enable Outbound IPv6" toggle: the panel
+// has no way to read that Railway setting directly (no env var
+// exposes it), so the admin confirms it here after enabling it on
+// Railway. When on, xray/links.js emits an extra "- IPv6" variant
+// alongside every normal link.
+function getIpv6Enabled() {
+  return getConfigValue('ipv6_enabled') === '1';
+}
+
+function setIpv6Enabled(enabled) {
+  setConfigValue('ipv6_enabled', enabled ? '1' : '0');
+}
+
+module.exports = { MODE_DIMENSIONS, MODE_LABELS, labelForMode, getModeState, setModeState, isRowEnabled, emptyDimensions, getEnabledAlpnValues, getEnabledFingerprints, getIpv6Enabled, setIpv6Enabled };
