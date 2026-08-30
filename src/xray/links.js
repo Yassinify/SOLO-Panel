@@ -78,17 +78,63 @@ function buildTransportParams(inbound, alpn, fingerprint, host) {
   return params;
 }
 
+// Some (transport x ALPN x fingerprint) combinations never establish
+// a working connection in practice (confirmed by real-world client
+// testing, not a guess -- see docs/problem.md for the investigation):
+//   - xhttp's browser-named fingerprints (chrome/firefox/safari/ios)
+//     each carry a fixed uTLS ALPN template that conflicts with a
+//     plain `http/1.1` ALPN request; the android template conflicts
+//     with any ALPN that includes h2.
+// These are inherent client/protocol-level incompatibilities, not
+// something this app's server-side config can fix -- so the broken
+// combination is simply never generated as a link anywhere (dashboard,
+// Subscription Panel, raw feed all share buildLinksForInbound below).
+// (ws/httpupgrade + the combined `h2,http/1.1` ALPN used to be listed
+// here too, but that turned out to be a real, fixable bug -- see
+// buildQueryString() below -- not an inherent incompatibility.)
+function isBrokenCombo(transport, alpn, fingerprint) {
+  if (transport === 'xhttp') {
+    if (alpn === 'http/1.1' && ['chrome', 'firefox', 'safari', 'ios'].includes(fingerprint)) {
+      return true;
+    }
+    if ((alpn === 'h2' || alpn === 'h2,http/1.1') && fingerprint === 'android') {
+      return true;
+    }
+  }
+  return false;
+}
+
+// URLSearchParams.toString() percent-encodes every reserved character
+// in a value, including ',' (as %2C) and '/' (as %2F). That's correct
+// per RFC 3986, but several real client apps' own share-link parsers
+// split a multi-value ALPN param on a literal ',' character *before*
+// percent-decoding it -- so an encoded comma (as in the combined
+// `h2,http/1.1` ALPN value) never gets split into two protocols, and
+// the client ends up offering one garbled, unrecognized ALPN string
+// instead of two valid ones, breaking the handshake. Confirmed via a
+// side-by-side comparison of a working `alpn=h2` link (no comma, no
+// problem) against a broken `alpn=h2%2Chttp%2F1.1` link the user
+// generated from this exact app -- see docs/problem.md. Undoing just
+// the comma-encoding (not the slash -- `alpn=h2` alone already proves
+// client apps handle %2F fine) fixes this without touching anything
+// else about the link.
+function buildQueryString(params) {
+  return params.toString().replace(/%2C/g, ',');
+}
+
 /**
  * Build one share link for one (inbound row x ALPN x fingerprint)
  * combination. Returns null if `externalHost` isn't known yet (should
- * not normally happen — Railway always provides a domain).
+ * not normally happen -- Railway always provides a domain), or if this
+ * combination is a known-broken one (see isBrokenCombo above).
  */
 function buildOneLink({ inbound, externalHost, alpn, fingerprint }) {
   if (!externalHost) return null;
+  if (isBrokenCombo(inbound.transport, alpn, fingerprint)) return null;
 
   const remark = remarkFor(inbound, alpn, fingerprint);
 
-  const params = buildTransportParams(inbound, alpn, fingerprint, externalHost);
+  const params = buildQueryString(buildTransportParams(inbound, alpn, fingerprint, externalHost));
   const encodedRemark = encodeURIComponent(remark);
 
   if (inbound.protocol === 'vless') {
