@@ -345,6 +345,24 @@ input[type=number] { -moz-appearance: textfield; }
   h1 { font-size: 22px; }
 
   .page-header { flex-direction: column; align-items: flex-start; }
+
+  /* Cards, the location flag, and small buttons are sized for a
+     desktop pointer and don't scale with text -- once a card goes
+     full-width on a stacked mobile layout they read as visually tiny
+     and are also below a comfortable touch-target size. Bump them up
+     for phones only; desktop/tablet sizing is unchanged. */
+  .card { padding: 20px; }
+  .location-flag { width: 34px; height: 26px; }
+  .qr-icon-btn { padding: 10px; }
+  .qr-icon-btn svg { width: 22px; height: 22px; }
+  .btn-small { padding: 8px 14px; font-size: 13px; }
+
+  /* Force the Location/Subscription URL row to stack on phones via an
+     explicit rule instead of relying on flex-wrap's own min-width
+     math (which depends on the browser correctly reporting a narrow
+     layout viewport -- not reliable across every device/browser
+     configuration). */
+  .two-col { flex-direction: column; }
 }
 
 /* Accessibility: visible keyboard-focus indicator for elements made
@@ -390,8 +408,11 @@ input[type=number] { -moz-appearance: textfield; }
 
   /* Small phones: reclaim horizontal space -- the 640px breakpoint
      above already tightens .container's own padding, this tightens
-     the cards/modal sitting inside it. */
-  .card { padding: 16px; }
+     the modal sitting inside it. (.card itself is NOT re-tightened
+     here: the 640px breakpoint just above intentionally bumped its
+     padding up for touch/visual sizing, and since most real phones
+     are under 480px wide, a smaller override here would silently
+     undo that fix for almost every device it was meant to help.) */
   .modal-box { padding: 18px; }
 }
 
