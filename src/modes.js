@@ -48,9 +48,15 @@ const MODE_DIMENSIONS = {
 // one-time manual step (attaching a Railway TCP Proxy and saving the
 // assigned address) before it can actually be reached, so it
 // shouldn't turn on for a deployment the admin hasn't configured yet.
+// 'xhttp' (not 'ws', changed 2026-08-30) is the default transport --
+// a real Railway deploy log showed xray-core itself printing a
+// deprecation warning for the `ws` transport ("migrate to XHTTP H2 &
+// H3 as soon as possible"), so a fresh deployment's zero-interaction
+// default now avoids it. `ws` is still fully generated and one click
+// away in Advanced, same as every other mode.
 const MODE_DEFAULTS = {
   protocol: { vless: true },
-  transport: { ws: true },
+  transport: { xhttp: true },
   alpn: { 'http/1.1': true },
   // 'randomized' is the only fingerprint confirmed (2026-08-29 xhttp
   // retest, see docs/problem.md) to work across every default ALPN

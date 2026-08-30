@@ -12,6 +12,7 @@ const session = require('express-session');
 const { getOrCreateSessionSecret } = require('./db'); // also initializes SQLite DB and tables on startup
 const { version: APP_VERSION } = require('../package.json');
 const { seedAdminFromEnv, verifyLogin, requireAuth, getOrCreateCsrfToken, requireCsrf } = require('./auth');
+const SqliteSessionStore = require('./sessionStore');
 const inbounds = require('./inbounds');
 const { listCores } = require('./cores');
 const { orderInbounds } = require('./priority');
@@ -87,6 +88,7 @@ app.use(express.urlencoded({ extended: false }));
 // survive restarts as long as DATA_DIR is on a persistent Volume.
 const sessionSecret = process.env.SESSION_SECRET || getOrCreateSessionSecret();
 app.use(session({
+  store: new SqliteSessionStore(), // persists sessions in SQLite instead of the default in-memory MemoryStore, so a redeploy/restart doesn't log the admin out (see src/sessionStore.js)
   secret: sessionSecret,
   resave: false,
   saveUninitialized: false,
@@ -378,6 +380,10 @@ tcpServer.listen(PORT, HOST, () => {
   console.log(`SOLO Panel listening on http://${HOST}:${PORT}`);
 });
 
+// Remove any leftover inbound row from a core that no longer exists
+// in the codebase (e.g. sing-box, removed 2026-08-29) before seeding
+// -- see pruneOrphanedCoreRows()'s own header for why this is needed.
+inbounds.pruneOrphanedCoreRows();
 // Seed the fixed set of auto-generated inbounds (no-op after first
 // boot), then start every registered core with its own rows (see
 // src/cores/index.js and inbounds.reloadCores()).

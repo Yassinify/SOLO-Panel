@@ -50,14 +50,15 @@ db.exec(`
 // `core` is always 'xray' -- sing-box support was removed 2026-08-29
 // per user request (see docs/how-program-work.md's Change Log); the
 // column is kept as-is (no migration needed) rather than dropped.
-// All rows run behind Railway's own edge TLS on the single public
-// port (no REALITY, no admin-configured TCP Proxy / host / port -- a
-// TLS/REALITY security-mode feature was briefly added 2026-08-29 and
-// reverted the same day per user request, see Change Log). ALPN and
-// TLS fingerprint don't change server-side behavior (Railway's edge
-// does the real TLS handshake, not the core), so they are NOT stored
-// per row - they're generated as link-only variants at share-link
-// build time (see xray/links.js).
+// Every row except the REALITY one runs behind Railway's own edge TLS
+// on the single public port; the REALITY row (transport = 'reality')
+// is the one exception -- it needs its own separately-exposed port
+// via an admin-attached Railway TCP Proxy (see xray/config.js's
+// header and inbounds.js's ensureRealityInbound()). ALPN and TLS
+// fingerprint don't change server-side behavior for every other
+// transport (Railway's edge does the real TLS handshake, not the
+// core), so they are NOT stored per row - they're generated as
+// link-only variants at share-link build time (see xray/links.js).
 // Credentials are shared across every row of the same protocol, so
 // every generated config is a different front door to the same
 // account.
@@ -96,13 +97,25 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `);
-// Note: if a table from the brief 2026-08-29 TLS/REALITY feature
-// still has `reality_*` columns (added via ALTER TABLE, not the
-// CREATE TABLE above), they're simply left in place, unused --
-// same non-destructive precedent as leaving the `core` column in
-// place after sing-box was removed, rather than risking a
-// DROP-and-regenerate (which would lose every credential/traffic
-// total) just to tidy up unused columns.
+// REALITY columns: additive (ALTER TABLE ADD COLUMN), not part of the
+// CREATE TABLE above, so upgrading an existing deployment never loses
+// its already-generated credentials/traffic totals for a DROP-and-
+// regenerate. Added only if missing (idempotent -- safe on every
+// boot). `reality_external_address` is the one genuinely admin-
+// entered value (Railway TCP Proxy's assigned "host:port"); the rest
+// are generated once by inbounds.js's ensureRealityInbound().
+const realityColumnsToAdd = [
+  'reality_private_key',
+  'reality_public_key',
+  'reality_short_id',
+  'reality_dest',
+  'reality_external_address',
+];
+for (const column of realityColumnsToAdd) {
+  if (!existingInboundColumns.includes(column) && !db.prepare('PRAGMA table_info(inbounds)').all().some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE inbounds ADD COLUMN ${column} TEXT`);
+  }
+}
 
 // Drop the old separate clients table from earlier versions of this
 // panel (WS transport, multi-client-per-inbound) — clients now live
@@ -150,5 +163,20 @@ function setConfigValue(key, value) {
     'INSERT INTO app_config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'
   ).run(key, value);
 }
+
+// Session storage table, backing src/sessionStore.js's custom
+// express-session Store (replaces the default in-memory MemoryStore,
+// which a real Railway deploy log flagged as unsuitable for
+// production -- every redeploy/restart would otherwise clear all
+// sessions, logging the admin out). `expires_at` is a Unix ms
+// timestamp; expired rows are lazily deleted on read (see
+// sessionStore.js) rather than needing a separate cleanup job.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS sessions (
+    sid TEXT PRIMARY KEY,
+    data TEXT NOT NULL,
+    expires_at INTEGER NOT NULL
+  );
+`);
 
 module.exports = { db, getOrCreateSessionSecret, getConfigValue, setConfigValue };

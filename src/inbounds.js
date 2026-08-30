@@ -12,7 +12,7 @@
 const crypto = require('crypto');
 const { db, getConfigValue, setConfigValue } = require('./db');
 const { getCore, listCores } = require('./cores');
-const { generatePath, generateRawHttpPath } = require('./utils');
+const { generatePath, generateRawHttpPath, generateRealityKeypair, generateShortId, REALITY_DEST } = require('./utils');
 const { getModeState, isRowEnabled } = require('./modes');
 
 // Every (core x protocol x transport) combination this panel
@@ -53,6 +53,24 @@ function getTotalTrafficBytes() {
 }
 
 /**
+ * Delete any `inbounds` row whose `core` value isn't a currently
+ * registered core (see src/cores/index.js). Handles leftover rows
+ * from a core that used to exist but was later removed from the
+ * codebase (e.g. sing-box, removed 2026-08-29) -- those rows are
+ * never started by reloadCore() (it filters by core name), but
+ * listInbounds() still returns them, so without this cleanup they
+ * keep showing up as permanently "unknown"-health cards on the
+ * dashboard/Subscription Panel and drag the active/total count down.
+ * Safe to run on every boot: a no-op once no such rows remain.
+ */
+function pruneOrphanedCoreRows() {
+  const validCores = listCores().map((core) => core.name);
+  if (validCores.length === 0) return; // safety: never wipe everything if cores/index.js is empty
+  const placeholders = validCores.map(() => '?').join(',');
+  db.prepare(`DELETE FROM inbounds WHERE core NOT IN (${placeholders})`).run(...validCores);
+}
+
+/**
  * Idempotently seed one inbound row per (core x protocol x transport)
  * combo (see CORE_COMBOS above). Credentials are generated once per
  * protocol and reused across every core/transport row of that
@@ -63,41 +81,98 @@ function ensureGeneratedInbounds() {
   const expectedCount = Object.values(CORE_COMBOS)
     .reduce((sum, combo) => sum + combo.protocols.length * combo.transports.length, 0);
   const existingCount = db.prepare('SELECT COUNT(*) AS n FROM inbounds').get().n;
-  if (existingCount >= expectedCount) return;
 
-  const credentialsByProtocol = {
-    vless: { client_uuid: crypto.randomUUID() },
-    trojan: { trojan_password: crypto.randomBytes(12).toString('hex') },
-  };
+  if (existingCount < expectedCount) {
+    const credentialsByProtocol = {
+      vless: { client_uuid: crypto.randomUUID() },
+      trojan: { trojan_password: crypto.randomBytes(12).toString('hex') },
+    };
 
-  const insert = db.prepare(
-    `INSERT INTO inbounds (
-      core, protocol, transport, path, client_uuid, trojan_password,
-      ss_method, ss_password, subscription_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  );
+    const insert = db.prepare(
+      `INSERT INTO inbounds (
+        core, protocol, transport, path, client_uuid, trojan_password,
+        ss_method, ss_password, subscription_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
 
-  const insertAll = db.transaction(() => {
-    for (const [core, combo] of Object.entries(CORE_COMBOS)) {
-      for (const protocol of combo.protocols) {
-        const creds = credentialsByProtocol[protocol];
-        for (const transport of combo.transports) {
-          insert.run(
-            core,
-            protocol,
-            transport,
-            transport === 'raw' ? generateRawHttpPath() : generatePath(),
-            creds.client_uuid || null,
-            creds.trojan_password || null,
-            creds.ss_method || null,
-            creds.ss_password || null,
-            crypto.randomBytes(16).toString('hex')
-          );
+    const insertAll = db.transaction(() => {
+      for (const [core, combo] of Object.entries(CORE_COMBOS)) {
+        for (const protocol of combo.protocols) {
+          const creds = credentialsByProtocol[protocol];
+          for (const transport of combo.transports) {
+            insert.run(
+              core,
+              protocol,
+              transport,
+              transport === 'raw' ? generateRawHttpPath() : generatePath(),
+              creds.client_uuid || null,
+              creds.trojan_password || null,
+              creds.ss_method || null,
+              creds.ss_password || null,
+              crypto.randomBytes(16).toString('hex')
+            );
+          }
         }
       }
-    }
-  });
-  insertAll();
+    });
+    insertAll();
+  }
+
+  // REALITY is seeded separately (not part of CORE_COMBOS's protocol x
+  // transport matrix -- it's one extra vless row, not a full combo) and
+  // has its own idempotency check, so it still runs even when the
+  // matrix above was already seeded on a prior boot.
+  ensureRealityInbound();
+}
+
+/**
+ * Idempotently seed the single REALITY inbound row (protocol vless,
+ * transport 'reality'). Reuses the same vless `client_uuid` every
+ * other vless row uses -- one account, many front doors, same design
+ * as CORE_COMBOS's shared-credentials-per-protocol approach above.
+ * REALITY's keypair/short ID/camouflage target are generated once and
+ * stored directly on the row so xray/config.js can build its inbound
+ * with no DB access of its own. Safe to call on every boot: a no-op
+ * once the row already exists.
+ */
+function ensureRealityInbound() {
+  const existing = db.prepare("SELECT id FROM inbounds WHERE transport = 'reality'").get();
+  if (existing) return;
+
+  const vlessRow = db.prepare("SELECT client_uuid FROM inbounds WHERE protocol = 'vless' LIMIT 1").get();
+  const clientUuid = vlessRow ? vlessRow.client_uuid : crypto.randomUUID();
+  const { privateKey, publicKey } = generateRealityKeypair();
+  const shortId = generateShortId();
+
+  db.prepare(
+    `INSERT INTO inbounds (
+      core, protocol, transport, path, client_uuid, subscription_id,
+      reality_private_key, reality_public_key, reality_short_id, reality_dest
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    'xray',
+    'vless',
+    'reality',
+    '', // no WS-style path -- REALITY is raw TCP, this column is unused for it
+    clientUuid,
+    crypto.randomBytes(16).toString('hex'),
+    privateKey,
+    publicKey,
+    shortId,
+    REALITY_DEST
+  );
+}
+
+/**
+ * Save the admin-entered Railway TCP Proxy address ("host:port") that
+ * REALITY's share link should point at (see xray/links.js's
+ * buildRealityLink()). Doesn't restart any core -- REALITY's xray-core
+ * inbound already listens on 0.0.0.0 regardless of whether an
+ * external address has been recorded yet; this only changes what the
+ * generated link displays.
+ */
+function setRealityExternalAddress(address) {
+  db.prepare("UPDATE inbounds SET reality_external_address = ? WHERE transport = 'reality'").run(address);
 }
 
 /**
@@ -171,7 +246,10 @@ module.exports = {
   listInbounds,
   getInbound,
   getTotalTrafficBytes,
+  pruneOrphanedCoreRows,
   ensureGeneratedInbounds,
+  ensureRealityInbound,
+  setRealityExternalAddress,
   getOrCreateGlobalSubscriptionId,
   addClientTraffic,
   reloadCore,
