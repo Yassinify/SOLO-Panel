@@ -22,7 +22,7 @@ const { attachProxy } = require('./xray/proxy');
 const statsPoller = require('./xray/statsPoller');
 const healthMonitor = require('./healthMonitor');
 const { getAllHealth } = require('./health');
-const { formatBytes, QR_ICON_SVG, regionFlag, regionName, regionList, explainField } = require('./utils');
+const { formatBytes, QR_ICON_SVG, regionFlag, regionName, currentRegion, explainField } = require('./utils');
 const { MODE_DIMENSIONS, getModeState, setModeState, isRowEnabled, emptyDimensions, labelForMode, getEnabledAlpnValues, getEnabledFingerprints } = require('./modes');
 const { getLimits, setLimits, getUsageSummary } = require('./subscriptionLimits');
 
@@ -278,7 +278,7 @@ app.get('/', requireAuth, (req, res) => {
     inbounds: rows,
     externalHost,
     subLink,
-    regionList: regionList(),
+    location: currentRegion(),
     activeCount,
     totalCount,
     systemStatus,

@@ -88,21 +88,18 @@ function regionName() {
 }
 
 /**
- * Every country Railway can deploy this app to (not just the one this
- * instance is currently running in), deduped by country -- e.g. the
- * two US regions collapse into one "United States" entry. Used by the
- * admin dashboard's Location section. Same source table as
- * regionFlag()/regionName() (docs.railway.com/deployments/regions).
+ * The country this deployment is actually running in right now (not
+ * every country Railway supports) -- same detection as regionFlag()/
+ * regionName() and the same flag used in generated config remarks
+ * (src/xray/links.js), but with the country-only name (no "(West)"/
+ * "(East)" suffix). Used by the admin dashboard's Location section.
+ * Falls back to the globe emoji/'Unknown' if the region can't be
+ * determined (e.g. local dev), matching regionName()'s fallback.
  */
-function regionList() {
-  const seen = new Set();
-  const list = [];
-  for (const r of REGION_FLAGS) {
-    if (seen.has(r.country)) continue;
-    seen.add(r.country);
-    list.push({ flag: r.flag, name: r.country });
-  }
-  return list;
+function currentRegion() {
+  const region = process.env.RAILWAY_REPLICA_REGION || '';
+  const match = REGION_FLAGS.find((r) => region.startsWith(r.prefix));
+  return match ? { flag: match.flag, name: match.country } : { flag: '\u{1F310}', name: 'Unknown' };
 }
 
 // Short, plain-language explanations for technical connection fields
@@ -136,7 +133,7 @@ module.exports = {
   FINGERPRINTS,
   regionFlag,
   regionName,
-  regionList,
+  currentRegion,
   TECH_EXPLANATIONS,
   explainField,
 };
