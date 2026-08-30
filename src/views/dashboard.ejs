@@ -62,11 +62,14 @@
       <hr class="section-divider">
 
       <h3 style="margin-bottom:4px;">Networking</h3>
-      <label style="display:flex; align-items:center; gap:8px; font-weight:400;">
-        <input type="checkbox" name="ipv6_enabled" id="ipv6_enabled" <%= ipv6Enabled ? 'checked' : '' %>>
-        Outbound IPv6
-      </label>
-      <p class="muted" style="margin:4px 0 0;">Mirrors Railway's Settings &rarr; Networking &rarr; "Enable Outbound IPv6" toggle. Check this only after enabling it on Railway and redeploying there. Adds an extra "- IPv6" variant of every config.</p>
+      <div class="switch-row">
+        <label class="switch">
+          <input type="checkbox" name="ipv6_enabled" id="ipv6_enabled" <%= ipv6Enabled ? 'checked' : '' %>>
+          <span class="switch-track"></span>
+        </label>
+        <span>Outbound IPv6</span>
+      </div>
+      <p class="muted" style="margin:4px 0 0;">Settings &rarr; Networking &rarr; "Enable Outbound IPv6" toggle. Check this only after enabling it on Railway and redeploying there</p>
 
       <hr class="section-divider">
 
