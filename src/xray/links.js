@@ -54,7 +54,12 @@ function buildTransportParams(inbound, alpn, fingerprint, host) {
   // client-facing URI convention -- every real-world example link
   // still uses type=tcp). See docs/problem.md for the research trail.
   const linkTransportType = inbound.transport === 'raw' ? 'tcp' : inbound.transport;
-  const params = new URLSearchParams({
+  // VLESS URIs require an explicit `encryption` field (always 'none'
+  // for VLESS -- xray-core's own transport-layer TLS handles
+  // encryption, this field is a VLESS protocol-URI requirement, not a
+  // real encryption toggle). Trojan URIs don't use this field at all.
+  const paramsObj = inbound.protocol === 'vless' ? { encryption: 'none' } : {};
+  Object.assign(paramsObj, {
     type: linkTransportType,
     security: 'tls',
     alpn,
@@ -63,6 +68,7 @@ function buildTransportParams(inbound, alpn, fingerprint, host) {
     path: inbound.path,
     host,
   });
+  const params = new URLSearchParams(paramsObj);
   if (inbound.transport === 'xhttp') {
     params.set('mode', 'auto');
   }
