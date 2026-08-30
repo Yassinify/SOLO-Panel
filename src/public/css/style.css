@@ -355,6 +355,7 @@ input[type=number] { -moz-appearance: textfield; }
   .location-flag { width: 34px; height: 26px; }
   .qr-icon-btn { padding: 10px; }
   .qr-icon-btn svg { width: 22px; height: 22px; }
+  .btn { padding: 13px 22px; font-size: 15px; }
   .btn-small { padding: 8px 14px; font-size: 13px; }
 
   /* Force the Location/Subscription URL row to stack on phones via an
@@ -414,6 +415,22 @@ input[type=number] { -moz-appearance: textfield; }
      are under 480px wide, a smaller override here would silently
      undo that fix for almost every device it was meant to help.) */
   .modal-box { padding: 18px; }
+}
+
+/* Smallest common phones (320-359px, e.g. iPhone SE/older Android) --
+   the 640px/480px breakpoints above already technically apply at this
+   width, but were never specifically tuned for it: container/card
+   padding eats a larger share of a 320px screen than a 400px+ one, so
+   tighten it a bit further here on top of (not instead of) the rules
+   above. Element sizing (.location-flag, .qr-icon-btn, .btn-small,
+   .card padding bump) from the 640px breakpoint is left as-is --
+   those are about touch-target/visual size, not available width, and
+   apply equally well at 320px. */
+@media (max-width: 359px) {
+  .container { padding: 16px 10px 40px; }
+  .card { padding: 16px; }
+  .two-col { gap: 14px; }
+  .form-row { gap: 8px; }
 }
 
 /* Step list used inside warning/info cards (e.g. the persistent-
