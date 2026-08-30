@@ -31,7 +31,7 @@
     </p>
 
     <% endpoints.forEach((ep) => { %>
-      <details style="margin-top:14px; border:1px solid var(--border); border-radius:var(--radius); padding:14px;">
+      <details class="endpoint-card">
         <summary style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
           <span><strong><%= ep.label %></strong></span>
           <span class="health-badge health-<%= ep.health.status %>"><%= ep.health.status %></span>

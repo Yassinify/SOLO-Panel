@@ -2,7 +2,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <div class="container">
   <% if (dataDirWarning) { %>
-    <div class="card" style="border-color: var(--danger);">
+    <div class="card card-danger">
       <p style="margin:0 0 10px;"><strong>⚠️ Persistent storage isn't configured.</strong> Without a Railway Volume, your admin password, generated links, and settings will be deleted on every redeploy.</p>
       <p style="margin:0 0 6px; font-weight:600;">To fix this, attach a Volume to this service:</p>
       <ol class="step-list">
@@ -14,7 +14,7 @@
   <% } %>
 
   <% if (modesError) { %>
-    <div class="card" style="border-color: var(--danger);">
+    <div class="card card-danger">
       <p style="margin:0;"><strong>Couldn't apply mode changes.</strong> At least one option must stay enabled in each section (<%= modesError.map((d) => d.charAt(0).toUpperCase() + d.slice(1)).join(', ') %>). No changes were made.</p>
     </div>
   <% } %>

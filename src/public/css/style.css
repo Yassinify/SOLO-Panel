@@ -310,6 +310,23 @@ input[type=number] { -moz-appearance: textfield; }
 .health-unavailable { color: var(--danger); border-color: var(--danger); }
 .health-unknown { color: var(--text-muted); }
 
+/* Danger-bordered info card (persistent-storage warning, modes-save
+   error) -- was a repeated inline style on two cards in dashboard.ejs. */
+.card-danger { border-color: var(--danger); }
+
+/* Subscription Panel endpoint cards (one per generated connection) --
+   was a repeated inline style block per <details> in subscription.ejs.
+   Hover/focus border shifts to the accent color so the cards read as
+   tappable, matching the hover treatment already used on .btn/.mode-toggle. */
+.endpoint-card {
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 14px;
+  transition: border-color 0.15s ease;
+}
+.endpoint-card:hover { border-color: var(--accent); }
+
 /* Responsive: narrow viewports (phones) */
 @media (max-width: 640px) {
   .container { padding: 20px 14px 48px; }
