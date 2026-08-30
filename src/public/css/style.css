@@ -325,12 +325,14 @@ input[type=number] { -moz-appearance: textfield; }
 .card-danger { border-color: var(--danger); }
 
 /* Two cards side by side (dashboard's Location + Subscription URL
-   cards) -- wraps to stacked full-width cards on narrow screens via
-   flex-wrap, same pattern as .form-row/.mode-grid. */
+   cards) -- stacks to full-width cards on narrow screens via the
+   `flex-direction: column` override below. No flex-wrap here: with
+   flex-direction switched to column at <=640px, flex-wrap: wrap
+   would wrap overflowing items into a second *column* instead of
+   stacking them in one column, pushing the second card off-screen. */
 .two-col {
   display: flex;
   gap: 20px;
-  flex-wrap: wrap;
   margin-bottom: 20px;
 }
 .two-col > .card { flex: 1; min-width: 220px; margin-bottom: 0; }
