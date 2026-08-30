@@ -20,14 +20,13 @@
   <% } %>
 
   <div class="card">
-    <label style="margin-top:0; display:flex; align-items:center; gap:8px;">
+    <label class="sub-header-row">
       <span>Subscription URL</span>
       <% if (location.iso2) { %>
         <img class="location-flag" src="https://flagcdn.com/24x18/<%= location.iso2 %>.png" srcset="https://flagcdn.com/48x36/<%= location.iso2 %>.png 2x" width="24" height="18" alt="<%= location.name %> flag" style="display:block; border-radius:2px; flex-shrink:0;">
       <% } else { %>
         <span><%= location.flag %></span>
       <% } %>
-      <span><%= location.name %></span>
     </label>
     <div class="link-box">
       <code id="sub-all" class="muted" tabindex="0" role="button" aria-label="Copy subscription URL to clipboard" title="Click to copy" onclick="copyLink('sub-all')"><%= subLink %></code>

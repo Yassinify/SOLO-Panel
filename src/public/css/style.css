@@ -165,6 +165,12 @@ h2 { font-size: 19px; }
 form.inline { display: inline; }
 
 label { display: block; font-size: 13px; color: var(--text-muted); margin: 14px 0 6px; }
+.sub-header-row {
+  margin: 0 0.5rem 1rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
 input[type=text], input[type=password], input[type=number], select {
   width: 100%;
   padding: 10px 12px;
