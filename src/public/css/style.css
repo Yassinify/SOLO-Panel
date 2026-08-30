@@ -469,64 +469,6 @@ input[type=number] { -moz-appearance: textfield; }
   color: var(--text);
 }
 
-/* Single on/off toggle switch (Outbound IPv6) -- unlike the
-   multi-value .mode-toggle chips below, this is one standalone
-   boolean flag, so it's styled as a classic switch instead of a chip. */
-.switch-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.switch {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 24px;
-  flex-shrink: 0;
-}
-.switch input {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-.switch-track {
-  position: absolute;
-  inset: 0;
-  background: var(--surface-alt);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-.switch-track::before {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--text-muted);
-  transition: transform 0.15s ease, background 0.15s ease;
-}
-.switch input:checked + .switch-track {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-.switch input:checked + .switch-track::before {
-  transform: translateX(20px);
-  background: #06231f;
-}
-.switch input:focus-visible + .switch-track {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
 /* Per-mode enable/disable options (Advanced: modes section), styled
    as clickable chips/pills rather than plain checkboxes -- the whole
    chip is the click target (native <label> behavior), and its

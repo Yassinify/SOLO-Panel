@@ -27,13 +27,11 @@ function labelForInbound(inbound) {
 
 // Per-link remark, e.g. "🇺🇸 VLESS - WS - http/1.1 - Chrome". Port is
 // never included -- every link uses the fixed EXTERNAL_PORT (443).
-// `ipv6` appends a " - IPv6" suffix -- see modes.js's getIpv6Enabled().
-function remarkFor(inbound, alpn, fingerprint, ipv6 = false) {
+function remarkFor(inbound, alpn, fingerprint) {
   const flag = regionFlag();
   const prefix = flag ? `${flag} ` : '';
   const fpLabel = FINGERPRINT_LABELS[fingerprint] || fingerprint;
-  const suffix = ipv6 ? ' - IPv6' : '';
-  return `${prefix}${inbound.protocol.toUpperCase()} - ${inbound.transport.toUpperCase()} - ${alpn} - ${fpLabel}${suffix}`;
+  return `${prefix}${inbound.protocol.toUpperCase()} - ${inbound.transport.toUpperCase()} - ${alpn} - ${fpLabel}`;
 }
 
 // Query params shared by vless/trojan.
@@ -77,14 +75,12 @@ function isBrokenCombo(transport, alpn, fingerprint) {
 
 // Build one share link for one (inbound row x ALPN x fingerprint)
 // combo. Returns null if externalHost is unknown or the combo is broken.
-// `ipv6` only affects the remark -- same host/port/credentials either
-// way (the panel has no separate IPv6 address to connect to).
-function buildOneLink({ inbound, externalHost, alpn, fingerprint, ipv6 = false }) {
+function buildOneLink({ inbound, externalHost, alpn, fingerprint }) {
   if (!externalHost) return null;
 
   if (isBrokenCombo(inbound.transport, alpn, fingerprint)) return null;
 
-  const remark = remarkFor(inbound, alpn, fingerprint, ipv6);
+  const remark = remarkFor(inbound, alpn, fingerprint);
 
   const params = buildTransportParams(inbound, alpn, fingerprint, externalHost).toString();
   const encodedRemark = encodeURIComponent(remark);
@@ -99,11 +95,9 @@ function buildOneLink({ inbound, externalHost, alpn, fingerprint, ipv6 = false }
 }
 
 // Every link variant for one inbound row (one per ALPN x fingerprint
-// combo, doubled to also include an "- IPv6" variant of each when
-// ipv6Enabled -- see modes.js's getIpv6Enabled()). alpnValues/
-// fingerprints default to every variant; callers normally pass the
-// admin's currently-enabled subsets (modes.js).
-function buildLinksForInbound({ inbound, externalHost, alpnValues = ALPN_VARIANTS, fingerprints = FINGERPRINTS, ipv6Enabled = false }) {
+// combo). alpnValues/fingerprints default to every variant; callers
+// normally pass the admin's currently-enabled subsets (modes.js).
+function buildLinksForInbound({ inbound, externalHost, alpnValues = ALPN_VARIANTS, fingerprints = FINGERPRINTS }) {
   if (!externalHost) return [];
 
   const links = [];
@@ -111,18 +105,14 @@ function buildLinksForInbound({ inbound, externalHost, alpnValues = ALPN_VARIANT
     for (const fingerprint of fingerprints) {
       const link = buildOneLink({ inbound, externalHost, alpn, fingerprint });
       if (link) links.push(link);
-      if (ipv6Enabled) {
-        const ipv6Link = buildOneLink({ inbound, externalHost, alpn, fingerprint, ipv6: true });
-        if (ipv6Link) links.push(ipv6Link);
-      }
     }
   }
   return links;
 }
 
 // Every link variant for every inbound row -- the full subscription content.
-function buildAllClientLinks(inboundRows, externalHost, alpnValues = ALPN_VARIANTS, fingerprints = FINGERPRINTS, ipv6Enabled = false) {
-  return inboundRows.flatMap((inbound) => buildLinksForInbound({ inbound, externalHost, alpnValues, fingerprints, ipv6Enabled }));
+function buildAllClientLinks(inboundRows, externalHost, alpnValues = ALPN_VARIANTS, fingerprints = FINGERPRINTS) {
+  return inboundRows.flatMap((inbound) => buildLinksForInbound({ inbound, externalHost, alpnValues, fingerprints }));
 }
 
 // Non-functional "informational" entry for the raw subscription feed

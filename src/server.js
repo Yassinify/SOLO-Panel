@@ -19,7 +19,7 @@ const statsPoller = require('./xray/statsPoller');
 const healthMonitor = require('./healthMonitor');
 const { getAllHealth } = require('./health');
 const { formatBytes, QR_ICON_SVG, regionFlag, regionName, currentRegion, explainField } = require('./utils');
-const { MODE_DIMENSIONS, getModeState, setModeState, isRowEnabled, emptyDimensions, labelForMode, getEnabledAlpnValues, getEnabledFingerprints, getIpv6Enabled, setIpv6Enabled } = require('./modes');
+const { MODE_DIMENSIONS, getModeState, setModeState, isRowEnabled, emptyDimensions, labelForMode, getEnabledAlpnValues, getEnabledFingerprints } = require('./modes');
 const { getLimits, setLimits, getUsageSummary } = require('./subscriptionLimits');
 
 // The public host clients connect to.
@@ -85,7 +85,7 @@ app.get('/health', (req, res) => {
 function sendRawSubscription(req, res) {
   // Rows whose mode is currently disabled are left out entirely.
   const enabledRows = inbounds.listInbounds().filter((row) => isRowEnabled(row));
-  const links = buildAllClientLinks(orderInbounds(enabledRows), externalHostFor(req), getEnabledAlpnValues(), getEnabledFingerprints(), getIpv6Enabled());
+  const links = buildAllClientLinks(orderInbounds(enabledRows), externalHostFor(req), getEnabledAlpnValues(), getEnabledFingerprints());
 
   // Leading informational entry (non-functional, 127.0.0.1:443) so a
   // client app's server list shows days-left/usage-left directly.
@@ -105,9 +105,8 @@ function sendSubscriptionPanel(req, res, subId) {
   const orderedRows = orderInbounds(enabledRows);
   const alpnValues = getEnabledAlpnValues();
   const fingerprints = getEnabledFingerprints();
-  const ipv6Enabled = getIpv6Enabled();
   const endpoints = orderedRows.map((row) => {
-    const links = buildLinksForInbound({ inbound: row, externalHost, alpnValues, fingerprints, ipv6Enabled });
+    const links = buildLinksForInbound({ inbound: row, externalHost, alpnValues, fingerprints });
     return {
       id: row.id,
       label: labelForInbound(row),
@@ -230,7 +229,6 @@ app.get('/', requireAuth, (req, res) => {
     modesError: req.query.modesError ? req.query.modesError.split(',') : null,
     limitDays: limits.days === null ? '' : limits.days,
     limitUsageGB: limits.usageGB === null ? '' : limits.usageGB,
-    ipv6Enabled: getIpv6Enabled(),
     daysLeftText: usageSummary.unlimitedDays ? 'Unlimited' : `${usageSummary.daysLeft} Days`,
     usageLeftText: usageSummary.unlimitedUsage ? 'Unlimited' : formatBytes(usageSummary.usageLeftBytes),
     dataDirWarning,
@@ -262,7 +260,6 @@ app.post('/settings/advanced', requireAuth, requireCsrf, async (req, res) => {
 
   setModeState(newState);
   setLimits({ days: req.body.days, usageGB: req.body.usage_gb });
-  setIpv6Enabled(req.body.ipv6_enabled === 'on');
 
   if (modesChanged) {
     await inbounds.reloadCores(); // only restart cores when a mode actually changed

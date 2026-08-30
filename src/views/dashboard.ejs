@@ -61,18 +61,6 @@
 
       <hr class="section-divider">
 
-      <h3 style="margin-bottom:4px;">Networking</h3>
-      <div class="switch-row">
-        <label class="switch">
-          <input type="checkbox" name="ipv6_enabled" id="ipv6_enabled" <%= ipv6Enabled ? 'checked' : '' %>>
-          <span class="switch-track"></span>
-        </label>
-        <span>Outbound IPv6</span>
-      </div>
-      <p class="muted" style="margin:4px 0 0;">Settings &rarr; Networking &rarr; "Enable Outbound IPv6" toggle. Check this only after enabling it on Railway and redeploying there</p>
-
-      <hr class="section-divider">
-
       <h3 style="margin-bottom:4px;">Time &amp; usage limits</h3>
       <div class="form-row">
         <div style="flex:1; min-width:140px;">
@@ -144,7 +132,6 @@
   var advancedForm = document.getElementById('advancedForm');
   var modeCheckboxes = Array.prototype.slice.call(document.querySelectorAll('.mode-toggle input[type="checkbox"]'));
   var limitInputs = Array.prototype.slice.call(advancedForm.querySelectorAll('input[type="number"]'));
-  var ipv6Checkbox = document.getElementById('ipv6_enabled');
 
   // Snapshot of the whole form (mode checkboxes + the two limit
   // fields) as loaded from the server, used to detect whether the
@@ -158,8 +145,7 @@
       .sort()
       .join(',');
     var limitsPart = limitInputs.map(function (input) { return input.name + '=' + input.value; }).join('&');
-    var ipv6Part = ipv6Checkbox.checked ? '1' : '0';
-    return modesPart + '|' + limitsPart + '|' + ipv6Part;
+    return modesPart + '|' + limitsPart;
   }
   var initialFormSignature = formSignature();
   var applyBtn = document.getElementById('applyBtn');
@@ -189,8 +175,6 @@
   limitInputs.forEach(function (input) {
     input.addEventListener('input', refreshApplyButton);
   });
-
-  ipv6Checkbox.addEventListener('change', refreshApplyButton);
 
   // Confirmation is a panel-styled modal (matching the QR modal),
   // not a native browser confirm() popup. Submitting the form opens
