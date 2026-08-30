@@ -58,10 +58,10 @@ const FINGERPRINTS = ['chrome', 'firefox', 'safari', 'ios', 'android', 'randomiz
 // more regions may be added later). Matched by prefix since the full
 // identifier can carry a datacenter suffix (e.g. `us-east4-eqdc4a`).
 const REGION_FLAGS = [
-  { prefix: 'us-west', flag: '\u{1F1FA}\u{1F1F8}', name: 'United States (West)', country: 'United States' }, // US West Metal (California)
-  { prefix: 'us-east', flag: '\u{1F1FA}\u{1F1F8}', name: 'United States (East)', country: 'United States' }, // US East Metal (Virginia)
-  { prefix: 'europe-west', flag: '\u{1F1F3}\u{1F1F1}', name: 'Netherlands', country: 'Netherlands' }, // EU West Metal (Amsterdam)
-  { prefix: 'asia-southeast', flag: '\u{1F1F8}\u{1F1EC}', name: 'Singapore', country: 'Singapore' }, // Southeast Asia Metal (Singapore)
+  { prefix: 'us-west', flag: '\u{1F1FA}\u{1F1F8}', name: 'United States (West)', country: 'United States', iso2: 'us' }, // US West Metal (California)
+  { prefix: 'us-east', flag: '\u{1F1FA}\u{1F1F8}', name: 'United States (East)', country: 'United States', iso2: 'us' }, // US East Metal (Virginia)
+  { prefix: 'europe-west', flag: '\u{1F1F3}\u{1F1F1}', name: 'Netherlands', country: 'Netherlands', iso2: 'nl' }, // EU West Metal (Amsterdam)
+  { prefix: 'asia-southeast', flag: '\u{1F1F8}\u{1F1EC}', name: 'Singapore', country: 'Singapore', iso2: 'sg' }, // Southeast Asia Metal (Singapore)
 ];
 
 /**
@@ -90,16 +90,22 @@ function regionName() {
 /**
  * The country this deployment is actually running in right now (not
  * every country Railway supports) -- same detection as regionFlag()/
- * regionName() and the same flag used in generated config remarks
- * (src/xray/links.js), but with the country-only name (no "(West)"/
- * "(East)" suffix). Used by the admin dashboard's Location section.
- * Falls back to the globe emoji/'Unknown' if the region can't be
- * determined (e.g. local dev), matching regionName()'s fallback.
+ * regionName(), but returns the country-only name (no "(West)"/
+ * "(East)" suffix) plus an `iso2` code for rendering a real flag
+ * image (not an emoji glyph -- Windows/many Linux Chromium builds
+ * don't ship flag emoji in their color font, so the emoji renders as
+ * boxes/letters instead of a picture there; see src/utils.js's own
+ * REGION_FLAGS comment and docs/how-program-work.md's Change Log for
+ * the investigation). `iso2` is null in the fallback case, since
+ * there's no specific country to show a flag image for. Used by the
+ * admin dashboard's Location section.
  */
 function currentRegion() {
   const region = process.env.RAILWAY_REPLICA_REGION || '';
   const match = REGION_FLAGS.find((r) => region.startsWith(r.prefix));
-  return match ? { flag: match.flag, name: match.country } : { flag: '\u{1F310}', name: 'Unknown' };
+  return match
+    ? { flag: match.flag, name: match.country, iso2: match.iso2 }
+    : { flag: '\u{1F310}', name: 'Unknown', iso2: null };
 }
 
 // Short, plain-language explanations for technical connection fields
