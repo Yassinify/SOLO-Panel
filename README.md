@@ -5,9 +5,9 @@ service on [Railway](https://railway.com) — no VPS, no external
 database, no manual setup.
 
 It runs [Xray-core](https://github.com/XTLS/Xray-core), auto-generating
-VLESS / VMess / Trojan / Shadowsocks configs over WebSocket, XHTTP, and
-HTTPUpgrade — all sharing Railway's single public HTTPS port (TLS
-terminated at Railway's edge). No TCP Proxy, no host/port setup.
+VLESS / Trojan configs over WebSocket, XHTTP, and HTTPUpgrade — all
+sharing Railway's single public HTTPS port (TLS terminated at
+Railway's edge). No TCP Proxy, no host/port setup.
 
 ## Features
 

@@ -51,11 +51,13 @@ db.exec(`
 // per user request (see docs/how-program-work.md's Change Log); the
 // column is kept as-is (no migration needed) rather than dropped.
 // All rows run behind Railway's own edge TLS on the single public
-// port (no REALITY, no admin-configured TCP Proxy / host / port - see
-// Change Log). ALPN and TLS fingerprint don't change server-side
-// behavior (Railway's edge does the real TLS handshake, not the
-// core), so they are NOT stored per row - they're generated as
-// link-only variants at share-link build time (see xray/links.js).
+// port (no REALITY, no admin-configured TCP Proxy / host / port -- a
+// TLS/REALITY security-mode feature was briefly added 2026-08-29 and
+// reverted the same day per user request, see Change Log). ALPN and
+// TLS fingerprint don't change server-side behavior (Railway's edge
+// does the real TLS handshake, not the core), so they are NOT stored
+// per row - they're generated as link-only variants at share-link
+// build time (see xray/links.js).
 // Credentials are shared across every row of the same protocol, so
 // every generated config is a different front door to the same
 // account.
@@ -72,7 +74,6 @@ const existingInboundColumns = db
 if (
   existingInboundColumns.includes('remark') ||
   existingInboundColumns.includes('external_host') ||
-  existingInboundColumns.includes('reality_dest') ||
   existingInboundColumns.includes('fingerprint') ||
   (existingInboundColumns.length > 0 && !existingInboundColumns.includes('core'))
 ) {
@@ -95,6 +96,13 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `);
+// Note: if a table from the brief 2026-08-29 TLS/REALITY feature
+// still has `reality_*` columns (added via ALTER TABLE, not the
+// CREATE TABLE above), they're simply left in place, unused --
+// same non-destructive precedent as leaving the `core` column in
+// place after sing-box was removed, rather than risking a
+// DROP-and-regenerate (which would lose every credential/traffic
+// total) just to tidy up unused columns.
 
 // Drop the old separate clients table from earlier versions of this
 // panel (WS transport, multi-client-per-inbound) — clients now live

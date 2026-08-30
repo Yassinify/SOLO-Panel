@@ -78,59 +78,6 @@ function buildTransportParams(inbound, alpn, fingerprint, host) {
   return params;
 }
 
-function buildVmessLink(inbound, alpn, fingerprint, host, remark) {
-  // Same client-facing-vs-server-config naming split as
-  // buildTransportParams() above: vmess links' `net` field needs the
-  // pre-rename "tcp" value for the raw transport (not Xray-core's own
-  // "raw" JSON alias), and `type` (the header-camouflage field for
-  // vmess links) needs "http" instead of "none" so the client actually
-  // sends the fake HTTP request line xray/proxy.js's handleConnection()
-  // sniffs for. See docs/problem.md for the research trail.
-  const isRaw = inbound.transport === 'raw';
-  const payload = {
-    v: '2',
-    ps: remark,
-    add: host,
-    port: String(EXTERNAL_PORT),
-    id: inbound.client_uuid,
-    aid: '0',
-    scy: 'auto',
-    net: isRaw ? 'tcp' : inbound.transport,
-    type: isRaw ? 'http' : 'none',
-    host,
-    path: inbound.path,
-    tls: 'tls',
-    sni: host,
-    alpn,
-    fp: fingerprint,
-  };
-  return `vmess://${Buffer.from(JSON.stringify(payload)).toString('base64')}`;
-}
-
-// Shadowsocks has no official way to carry transport/TLS info in
-// query params the way vless/trojan do — real SS clients (Shadowrocket,
-// Clash, NekoBox, etc.) expect it wrapped inside a single `plugin=`
-// value understood by v2ray-plugin instead. That plugin only
-// implements a websocket+TLS transport, so xhttp/httpupgrade rows
-// still produce a link, but only the `ws` transport is actually
-// usable by standard SS clients today.
-function buildShadowsocksPluginOpts(inbound, host) {
-  return ['v2ray-plugin', 'tls', `host=${host}`, `path=${inbound.path}`, 'mux=0'].join(';');
-}
-
-// Shadowsocks link for one inbound row. Unlike vless/trojan/vmess,
-// there's no ALPN/fingerprint fan-out here: those are TLS ClientHello
-// hints consumed by xray-core's own transports, not by v2ray-plugin,
-// so varying them would just produce identical duplicate links.
-function buildShadowsocksLink(inbound, host) {
-  const userInfo = Buffer.from(`${inbound.ss_method}:${inbound.ss_password}`).toString('base64');
-  const flag = regionFlag();
-  const prefix = flag ? `${flag} ` : '';
-  const remark = `${prefix}${inbound.protocol.toUpperCase()} - ${inbound.transport.toUpperCase()}`;
-  const params = new URLSearchParams({ plugin: buildShadowsocksPluginOpts(inbound, host) });
-  return `ss://${userInfo}@${host}:${EXTERNAL_PORT}?${params}#${encodeURIComponent(remark)}`;
-}
-
 /**
  * Build one share link for one (inbound row x ALPN x fingerprint)
  * combination. Returns null if `externalHost` isn't known yet (should
@@ -140,10 +87,6 @@ function buildOneLink({ inbound, externalHost, alpn, fingerprint }) {
   if (!externalHost) return null;
 
   const remark = remarkFor(inbound, alpn, fingerprint);
-
-  if (inbound.protocol === 'vmess') {
-    return buildVmessLink(inbound, alpn, fingerprint, externalHost, remark);
-  }
 
   const params = buildTransportParams(inbound, alpn, fingerprint, externalHost);
   const encodedRemark = encodeURIComponent(remark);
@@ -158,9 +101,36 @@ function buildOneLink({ inbound, externalHost, alpn, fingerprint }) {
 }
 
 /**
+ * Build a REALITY share link. Unlike every other transport, REALITY
+ * doesn't point at Railway's shared 443 -- it needs its own
+ * separately-exposed port (see xray/config.js's header), so `host`/
+ * `port` come from the admin-entered `reality_external_address`
+ * column (Railway TCP Proxy's assigned address), not `externalHost`/
+ * `EXTERNAL_PORT`. Fingerprint is still a real lever here (unlike
+ * every other transport's link-only `fp=`): xray-core itself performs
+ * the real TLS handshake for a `reality` inbound, so the client's
+ * uTLS ClientHello shape genuinely matters server-side. No ALPN fan-
+ * out -- REALITY's own real TLS handshake negotiates that with the
+ * client directly, it isn't a separate link-level hint to vary.
+ */
+function buildRealityLink(inbound, fingerprint, host, port, remark) {
+  const params = new URLSearchParams({
+    security: 'reality',
+    encryption: 'none',
+    pbk: inbound.reality_public_key,
+    sid: inbound.reality_short_id,
+    sni: inbound.reality_dest,
+    fp: fingerprint,
+    type: 'tcp',
+  });
+  return `vless://${inbound.client_uuid}@${host}:${port}?${params}#${encodeURIComponent(remark)}`;
+}
+
+/**
  * Every link variant for one inbound row: one (ALPN x fingerprint)
- * link per combination for vless/trojan/vmess, or a single plugin-
- * based link for shadowsocks (see buildShadowsocksLink).
+ * link per combination for vless/trojan, or one link per
+ * fingerprint (no ALPN fan-out) for the REALITY row (see
+ * buildRealityLink above).
  *
  * `alpnValues`/`fingerprints` default to every variant, but callers
  * pass the admin's currently-enabled subsets (src/modes.js's
@@ -170,8 +140,19 @@ function buildOneLink({ inbound, externalHost, alpn, fingerprint }) {
 function buildLinksForInbound({ inbound, externalHost, alpnValues = ALPN_VARIANTS, fingerprints = FINGERPRINTS }) {
   if (!externalHost) return [];
 
-  if (inbound.protocol === 'shadowsocks') {
-    return [buildShadowsocksLink(inbound, externalHost)];
+  if (inbound.transport === 'reality') {
+    // Not configured yet (admin hasn't attached a Railway TCP Proxy
+    // and saved its assigned address) -- no usable link to offer.
+    if (!inbound.reality_external_address) return [];
+    const separatorIndex = inbound.reality_external_address.lastIndexOf(':');
+    if (separatorIndex === -1) return []; // malformed "host:port" value, fail safe rather than build a broken link
+    const host = inbound.reality_external_address.slice(0, separatorIndex);
+    const port = inbound.reality_external_address.slice(separatorIndex + 1);
+    const flag = regionFlag();
+    const prefix = flag ? `${flag} ` : '';
+    return fingerprints.map((fingerprint) =>
+      buildRealityLink(inbound, fingerprint, host, port, `${prefix}VLESS - REALITY - ${FINGERPRINT_LABELS[fingerprint] || fingerprint}`)
+    );
   }
 
   const links = [];

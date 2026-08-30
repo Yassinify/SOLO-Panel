@@ -12,7 +12,7 @@
 const crypto = require('crypto');
 const { db, getConfigValue, setConfigValue } = require('./db');
 const { getCore, listCores } = require('./cores');
-const { generatePath, generateSsPassword, generateRawHttpPath } = require('./utils');
+const { generatePath, generateRawHttpPath } = require('./utils');
 const { getModeState, isRowEnabled } = require('./modes');
 
 // Every (core x protocol x transport) combination this panel
@@ -26,13 +26,10 @@ const { getModeState, isRowEnabled } = require('./modes');
 // xray/config.js).
 const CORE_COMBOS = {
   xray: {
-    protocols: ['vless', 'vmess', 'trojan', 'shadowsocks'],
+    protocols: ['vless', 'trojan'],
     transports: ['ws', 'xhttp', 'httpupgrade', 'raw'],
   },
 };
-
-// Fixed AEAD method for every generated Shadowsocks inbound.
-const SS_METHOD = 'chacha20-ietf-poly1305';
 
 function listInbounds() {
   return db.prepare('SELECT * FROM inbounds ORDER BY id').all();
@@ -70,9 +67,7 @@ function ensureGeneratedInbounds() {
 
   const credentialsByProtocol = {
     vless: { client_uuid: crypto.randomUUID() },
-    vmess: { client_uuid: crypto.randomUUID() },
     trojan: { trojan_password: crypto.randomBytes(12).toString('hex') },
-    shadowsocks: { ss_method: SS_METHOD, ss_password: generateSsPassword() },
   };
 
   const insert = db.prepare(

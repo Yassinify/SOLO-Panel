@@ -31,11 +31,6 @@ function generatePath() {
   return `/${crypto.randomBytes(6).toString('hex')}`;
 }
 
-/** Random Shadowsocks password (base64, used with a fixed AEAD method). */
-function generateSsPassword() {
-  return crypto.randomBytes(16).toString('base64');
-}
-
 // Harder-to-guess path for the `raw` transport's HTTP-obfuscation
 // header: base64 of a small JSON blob (junk + protocol/mode markers,
 // matching the shape real clients like v2rayNG/NekoBox expect on the
@@ -118,7 +113,6 @@ module.exports = {
   formatBytes,
   QR_ICON_SVG,
   generatePath,
-  generateSsPassword,
   generateRawHttpPath,
   ALPN_VARIANTS,
   FINGERPRINTS,

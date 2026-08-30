@@ -65,17 +65,8 @@ function buildInbound(inboundRow) {
 
   if (protocol === 'vless') {
     settings = { clients: [{ id: inboundRow.client_uuid, email }], decryption: 'none' };
-  } else if (protocol === 'vmess') {
-    settings = { clients: [{ id: inboundRow.client_uuid, email }] };
   } else if (protocol === 'trojan') {
     settings = { clients: [{ password: inboundRow.trojan_password, email }] };
-  } else if (protocol === 'shadowsocks') {
-    settings = {
-      method: inboundRow.ss_method,
-      password: inboundRow.ss_password,
-      network: 'tcp,udp',
-      email,
-    };
   }
 
   return {

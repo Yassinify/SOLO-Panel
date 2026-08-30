@@ -34,8 +34,8 @@ const { ALPN_VARIANTS, FINGERPRINTS } = require('./utils');
 // same way but consulted via getEnabledAlpnValues()/
 // getEnabledFingerprints() instead of isRowEnabled().
 const MODE_DIMENSIONS = {
-  protocol: ['vless', 'vmess', 'trojan', 'shadowsocks'],
-  transport: ['ws', 'xhttp', 'httpupgrade', 'raw'],
+  protocol: ['vless', 'trojan'],
+  transport: ['ws', 'xhttp', 'httpupgrade', 'raw', 'reality'],
   alpn: ALPN_VARIANTS,
   fingerprint: FINGERPRINTS,
 };
@@ -43,13 +43,21 @@ const MODE_DIMENSIONS = {
 // Which value(s) per dimension are enabled the first time this app
 // runs (i.e. before the admin has ever saved a mode change) -- see
 // the module header note above. A value missing from a dimension here
-// defaults to disabled.
-//
+// defaults to disabled. 'reality' (added 2026-08-29) is deliberately
+// left disabled by default -- unlike every other transport it needs a
+// one-time manual step (attaching a Railway TCP Proxy and saving the
+// assigned address) before it can actually be reached, so it
+// shouldn't turn on for a deployment the admin hasn't configured yet.
 const MODE_DEFAULTS = {
   protocol: { vless: true },
   transport: { ws: true },
   alpn: { 'http/1.1': true },
-  fingerprint: { chrome: true },
+  // 'randomized' is the only fingerprint confirmed (2026-08-29 xhttp
+  // retest, see docs/problem.md) to work across every default ALPN
+  // variant (http/1.1, h2, h2,http/1.1) -- 'chrome' fails on
+  // http/1.1, the previous default ALPN, so it would have shipped a
+  // known-broken default pairing.
+  fingerprint: { randomized: true },
 };
 
 function configKey(dimension, value) {
@@ -61,8 +69,8 @@ function configKey(dimension, value) {
 // rules 16/31) -- an admin shouldn't need to already know what
 // "httpupgrade" means to toggle it.
 const MODE_LABELS = {
-  protocol: { vless: 'VLESS', vmess: 'VMess', trojan: 'Trojan', shadowsocks: 'Shadowsocks' },
-  transport: { ws: 'WebSocket', xhttp: 'XHTTP', httpupgrade: 'HTTP Upgrade', raw: 'Raw (camouflaged TCP)' },
+  protocol: { vless: 'VLESS', trojan: 'Trojan' },
+  transport: { ws: 'WebSocket', xhttp: 'XHTTP', httpupgrade: 'HTTP Upgrade', raw: 'Raw (camouflaged TCP)', reality: 'REALITY (needs setup)' },
   alpn: { 'http/1.1': 'HTTP/1.1', h2: 'HTTP/2', 'h2,http/1.1': 'HTTP/2 + HTTP/1.1' },
   fingerprint: { chrome: 'Chrome', firefox: 'Firefox', safari: 'Safari', ios: 'iOS', android: 'Android', randomized: 'Randomized' },
 };
