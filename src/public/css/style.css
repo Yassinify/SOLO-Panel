@@ -314,6 +314,17 @@ input[type=number] { -moz-appearance: textfield; }
    error) -- was a repeated inline style on two cards in dashboard.ejs. */
 .card-danger { border-color: var(--danger); }
 
+/* Two cards side by side (dashboard's Location + Subscription URL
+   cards) -- wraps to stacked full-width cards on narrow screens via
+   flex-wrap, same pattern as .form-row/.mode-grid. */
+.two-col {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.two-col > .card { flex: 1; min-width: 220px; margin-bottom: 0; }
+
 /* Subscription Panel endpoint cards (one per generated connection) --
    was a repeated inline style block per <details> in subscription.ejs.
    Hover/focus border shifts to the accent color so the cards read as

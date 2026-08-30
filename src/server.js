@@ -22,7 +22,7 @@ const { attachProxy } = require('./xray/proxy');
 const statsPoller = require('./xray/statsPoller');
 const healthMonitor = require('./healthMonitor');
 const { getAllHealth } = require('./health');
-const { formatBytes, QR_ICON_SVG, regionFlag, regionName, explainField } = require('./utils');
+const { formatBytes, QR_ICON_SVG, regionFlag, regionName, regionList, explainField } = require('./utils');
 const { MODE_DIMENSIONS, getModeState, setModeState, isRowEnabled, emptyDimensions, labelForMode, getEnabledAlpnValues, getEnabledFingerprints } = require('./modes');
 const { getLimits, setLimits, getUsageSummary } = require('./subscriptionLimits');
 
@@ -126,7 +126,7 @@ function sendRawSubscription(req, res) {
   // directly, per user request.
   const usageSummary = getUsageSummary(inbounds.getTotalTrafficBytes());
   const usageInfoLink = buildUsageInfoLink(
-    `\ud83d\udcc5 ${usageSummary.unlimitedDays ? 'Unlimited' : `${usageSummary.daysLeft} Days`}  \ud83d\udcca ${usageSummary.unlimitedUsage ? 'Unlimited' : formatBytes(usageSummary.usageLeftBytes)}`
+    `\ud83d\udcc5 ${usageSummary.unlimitedDays ? 'Unlimited' : `${usageSummary.daysLeft} Days`}  \ud83d\udcca ${usageSummary.unlimitedUsage ? 'Unlimited' : `${formatBytes(usageSummary.usageUsedBytes)} / ${usageSummary.usageTotalGB} GB`}`
   );
 
   res.type('text/plain').send(Buffer.from([usageInfoLink, ...links].join('\n')).toString('base64'));
@@ -179,7 +179,7 @@ function sendSubscriptionPanel(req, res, subId) {
     totalCount: endpoints.length,
     systemStatus,
     daysLeftText: usageSummary.unlimitedDays ? 'Unlimited' : `${usageSummary.daysLeft} Days`,
-    usageLeftText: usageSummary.unlimitedUsage ? 'Unlimited' : formatBytes(usageSummary.usageLeftBytes),
+    usageLeftText: usageSummary.unlimitedUsage ? 'Unlimited' : `${formatBytes(usageSummary.usageUsedBytes)} / ${usageSummary.usageTotalGB} GB`,
     explainField,
     qrIconSvg: QR_ICON_SVG,
   });
@@ -278,6 +278,7 @@ app.get('/', requireAuth, (req, res) => {
     inbounds: rows,
     externalHost,
     subLink,
+    regionList: regionList(),
     activeCount,
     totalCount,
     systemStatus,

@@ -58,10 +58,10 @@ const FINGERPRINTS = ['chrome', 'firefox', 'safari', 'ios', 'android', 'randomiz
 // more regions may be added later). Matched by prefix since the full
 // identifier can carry a datacenter suffix (e.g. `us-east4-eqdc4a`).
 const REGION_FLAGS = [
-  { prefix: 'us-west', flag: '\u{1F1FA}\u{1F1F8}', name: 'United States (West)' }, // US West Metal (California)
-  { prefix: 'us-east', flag: '\u{1F1FA}\u{1F1F8}', name: 'United States (East)' }, // US East Metal (Virginia)
-  { prefix: 'europe-west', flag: '\u{1F1F3}\u{1F1F1}', name: 'Netherlands' }, // EU West Metal (Amsterdam)
-  { prefix: 'asia-southeast', flag: '\u{1F1F8}\u{1F1EC}', name: 'Singapore' }, // Southeast Asia Metal (Singapore)
+  { prefix: 'us-west', flag: '\u{1F1FA}\u{1F1F8}', name: 'United States (West)', country: 'United States' }, // US West Metal (California)
+  { prefix: 'us-east', flag: '\u{1F1FA}\u{1F1F8}', name: 'United States (East)', country: 'United States' }, // US East Metal (Virginia)
+  { prefix: 'europe-west', flag: '\u{1F1F3}\u{1F1F1}', name: 'Netherlands', country: 'Netherlands' }, // EU West Metal (Amsterdam)
+  { prefix: 'asia-southeast', flag: '\u{1F1F8}\u{1F1EC}', name: 'Singapore', country: 'Singapore' }, // Southeast Asia Metal (Singapore)
 ];
 
 /**
@@ -85,6 +85,24 @@ function regionName() {
   const region = process.env.RAILWAY_REPLICA_REGION || '';
   const match = REGION_FLAGS.find((r) => region.startsWith(r.prefix));
   return match ? match.name : '\u{1F310}';
+}
+
+/**
+ * Every country Railway can deploy this app to (not just the one this
+ * instance is currently running in), deduped by country -- e.g. the
+ * two US regions collapse into one "United States" entry. Used by the
+ * admin dashboard's Location section. Same source table as
+ * regionFlag()/regionName() (docs.railway.com/deployments/regions).
+ */
+function regionList() {
+  const seen = new Set();
+  const list = [];
+  for (const r of REGION_FLAGS) {
+    if (seen.has(r.country)) continue;
+    seen.add(r.country);
+    list.push({ flag: r.flag, name: r.country });
+  }
+  return list;
 }
 
 // Short, plain-language explanations for technical connection fields
@@ -118,6 +136,7 @@ module.exports = {
   FINGERPRINTS,
   regionFlag,
   regionName,
+  regionList,
   TECH_EXPLANATIONS,
   explainField,
 };

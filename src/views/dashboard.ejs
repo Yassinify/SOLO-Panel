@@ -19,8 +19,15 @@
     </div>
   <% } %>
 
-  <div class="card">
-    <div>
+  <div class="two-col">
+    <div class="card">
+      <label style="margin-top:0;">Location</label>
+      <% regionList.forEach((r) => { %>
+        <p class="muted" style="margin:0 0 6px;">Location: <%= r.flag %> <%= r.name %></p>
+      <% }) %>
+    </div>
+
+    <div class="card" style="flex:2;">
       <label style="margin-top:0;">Subscription URL</label>
       <div class="link-box">
         <code id="sub-all" class="muted" tabindex="0" role="button" aria-label="Copy subscription URL to clipboard" title="Click to copy" onclick="copyLink('sub-all')"><%= subLink %></code>
@@ -66,8 +73,8 @@
       <h3 style="margin-bottom:4px;">Time &amp; usage limits</h3>
       <p class="muted" style="margin-top:0;">
         Optionally cap this subscription to a number of days and/or a
-        total data amount. Leave a field blank for unlimited (the
-        default). Applying restarts the countdown from now.
+        total data amount (defaults to 30 days / 80 GB). Leave a field
+        blank for unlimited. Applying restarts the countdown from now.
       </p>
       <div class="form-row">
         <div style="flex:1; min-width:140px;">
