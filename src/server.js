@@ -3,7 +3,6 @@
 
 const path = require('path');
 const http = require('http');
-const net = require('net');
 const express = require('express');
 const session = require('express-session');
 const { getOrCreateSessionSecret } = require('./db'); // also initializes SQLite DB and tables on startup
@@ -37,18 +36,9 @@ function isBrowserRequest(req) {
 seedAdminFromEnv();
 
 const app = express();
-// Created explicitly, doesn't listen directly -- see tcpServer below,
-// which accepts connections first so attachProxy() can sniff raw-
-// transport traffic before Express's own parsing sees it.
 const server = http.createServer(app);
 
 const PORT = process.env.PORT || 3000;
-// Dedicated port for `raw` transport (see xray/links.js's
-// rawTcpProxyTarget() and xray/proxy.js's handleConnection). Not
-// reached via Railway's shared HTTP domain -- the admin must
-// separately enable Railway's TCP Proxy feature and point its
-// Internal Port at this value (Settings -> Networking -> TCP Proxy).
-const RAW_TCP_PORT = process.env.RAW_TCP_PORT || 8443;
 const HOST = '0.0.0.0';
 
 app.set('view engine', 'ejs');
@@ -62,7 +52,7 @@ app.set('trust proxy', 1);
 // Must run before static/session/routes: forwards XHTTP requests to
 // the matching inbound's internal core process, bypassing the rest
 // of the middleware chain.
-const { xhttpMiddleware, handleConnection } = attachProxy(server, inbounds.listInbounds, internalPortForRow);
+const { xhttpMiddleware } = attachProxy(server, inbounds.listInbounds, internalPortForRow);
 app.use(xhttpMiddleware);
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -278,23 +268,8 @@ app.post('/settings/advanced', requireAuth, requireCsrf, async (req, res) => {
   res.redirect('/');
 });
 
-// The actual publicly-listening socket. Every connection goes to
-// handleConnection() first, which sniffs raw-transport traffic and
-// hands anything else to `server` unchanged.
-const tcpServer = net.createServer(handleConnection);
-
-tcpServer.listen(PORT, HOST, () => {
+server.listen(PORT, HOST, () => {
   console.log(`SOLO Panel listening on http://${HOST}:${PORT}`);
-});
-
-// Dedicated listener for Railway's TCP Proxy (see RAW_TCP_PORT above)
-// -- true raw TCP passthrough, no HTTP edge in front of it, unlike
-// the shared port above. Reuses the exact same sniff/route logic
-// since `raw` connections still send the same camouflage header.
-const rawTcpServer = net.createServer(handleConnection);
-
-rawTcpServer.listen(RAW_TCP_PORT, HOST, () => {
-  console.log(`SOLO Panel raw-TCP listener on ${HOST}:${RAW_TCP_PORT} (point Railway's TCP Proxy Internal Port here)`);
 });
 
 // Remove leftover inbound rows from a core that no longer exists,
@@ -317,8 +292,7 @@ async function shutdown() {
   statsPoller.stop();
   healthMonitor.stop();
   await Promise.all(listCores().map((core) => core.stop()));
-  rawTcpServer.close();
-  tcpServer.close(() => process.exit(0));
+  server.close(() => process.exit(0));
 }
 
 process.on('SIGTERM', shutdown);

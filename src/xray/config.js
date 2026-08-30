@@ -30,22 +30,6 @@ function buildInbound(inboundRow) {
     streamSettings.xhttpSettings = { path: inboundRow.path, mode: 'auto' };
   } else if (inboundRow.transport === 'httpupgrade') {
     streamSettings.httpupgradeSettings = { path: inboundRow.path };
-  } else if (inboundRow.transport === 'raw') {
-    // Plain TCP disguised as an HTTP request so it looks like ordinary
-    // traffic on the wire; xray/proxy.js hijacks the raw socket for
-    // matching requests instead of buffering them like xhttp. Query
-    // string is dropped since Xray's header check only checks the path.
-    streamSettings.rawSettings = {
-      header: {
-        type: 'http',
-        request: {
-          path: [inboundRow.path.split('?')[0]],
-          ...(process.env.RAILWAY_PUBLIC_DOMAIN
-            ? { headers: { Host: [process.env.RAILWAY_PUBLIC_DOMAIN] } }
-            : {}),
-        },
-      },
-    };
   }
 
   const protocol = inboundRow.protocol;

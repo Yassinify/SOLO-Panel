@@ -25,16 +25,6 @@ function generatePath() {
   return `/${crypto.randomBytes(6).toString('hex')}`;
 }
 
-// Harder-to-guess path for the `raw` transport's HTTP-obfuscation
-// header: base64 JSON blob matching the shape real clients expect,
-// plus an early-data query hint.
-function generateRawHttpPath() {
-  const junk = crypto.randomBytes(9).toString('base64').replace(/[^a-zA-Z0-9]/g, '');
-  const payload = { junk, protocol: 'vl', mode: 'proxyip', panelIPs: [] };
-  const encoded = Buffer.from(JSON.stringify(payload)).toString('base64');
-  return `/${encoded}?ed=2560`;
-}
-
 // ALPN and TLS-fingerprint variants offered per inbound. Link-only
 // (client-side) values -- Railway's edge does the real TLS handshake.
 const ALPN_VARIANTS = ['http/1.1', 'h2'];
@@ -99,7 +89,6 @@ module.exports = {
   formatBytes,
   QR_ICON_SVG,
   generatePath,
-  generateRawHttpPath,
   ALPN_VARIANTS,
   FINGERPRINTS,
   regionFlag,

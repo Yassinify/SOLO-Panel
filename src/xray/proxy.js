@@ -1,41 +1,15 @@
-// Lets Xray's WS/XHTTP/HTTPUpgrade/raw inbounds share Railway's single
-// public port with the Express panel UI. Railway forwards everything
-// on 0.0.0.0:$PORT to this module (see server.js, which listens via a
-// plain net.Server and hands every accepted socket to
-// `handleConnection` below instead of letting the Express app's
-// http.Server listen directly), so this module can route each
-// connection to the right place before HTTP parsing even happens:
-//   - `raw` fakes an HTTP request line/headers as camouflage, then
-//     immediately continues the same TCP stream as raw (non-HTTP)
-//     protocol bytes. Node's own http.Server can't cope with that (no
-//     Content-Length, and what follows isn't a valid next HTTP
-//     message), so `raw` connections are sniffed and forwarded at the
-//     raw TCP level, before the http.Server ever sees them.
-//   - Everything else (the panel UI, plus ws/xhttp/httpupgrade
-//     inbounds) is handed to the http.Server exactly as if it had
-//     accepted the connection itself, and is routed the same way as
-//     before: WS/HTTPUpgrade via the 'upgrade' event, XHTTP via
-//     `xhttpMiddleware` — both matched by path against the generated
-//     inbounds' `path` column.
+// Lets Xray's WS/XHTTP/HTTPUpgrade inbounds share Railway's single
+// public port with the Express panel UI. Everything is handed to the
+// http.Server exactly as if it had accepted the connection itself:
+// WS/HTTPUpgrade via the 'upgrade' event, XHTTP via `xhttpMiddleware`
+// — both matched by path against the generated inbounds' `path` column.
 'use strict';
 
 const http = require('http');
 const net = require('net');
 
-// How long to wait for a full camouflage header (ending `\r\n\r\n`)
-// before giving up and treating the connection as ordinary HTTP.
-const RAW_SNIFF_TIMEOUT_MS = 3000;
-// Camouflage headers are small (a handful of short lines); bail out
-// well before this so a connection that will never send `\r\n\r\n`
-// can't make us buffer unboundedly.
-const RAW_SNIFF_MAX_BYTES = 8192;
-
 /**
  * @param {import('http').Server} server - the Express app's HTTP server.
- *   Never listens directly (see server.js) — non-`raw` connections are
- *   handed to it via `server.emit('connection', socket)` from
- *   `handleConnection` below, which makes it behave exactly as if it
- *   had accepted the connection itself.
  * @param {() => Array} listInbounds - returns current inbound rows
  *   (called per-connection/request so newly generated inbounds are
  *   picked up without restarting the proxy).
@@ -46,17 +20,7 @@ const RAW_SNIFF_MAX_BYTES = 8192;
  */
 function attachProxy(server, listInbounds, internalPortForRow) {
   function findInboundForPath(path) {
-    return listInbounds().find((row) => row.path === path && row.transport !== 'xhttp' && row.transport !== 'raw')
-      || null;
-  }
-
-  // `raw` inbound paths are stored with a query string (e.g.
-  // `?ed=2560`, the early-data hint — see utils.js's
-  // generateRawHttpPath), but xray-core's own `raw` header match (see
-  // xray/config.js) and real clients' request lines only carry the
-  // path segment, so this compares path-only on both sides.
-  function findRawInboundForPath(path) {
-    return listInbounds().find((row) => row.transport === 'raw' && row.path.split('?')[0] === path)
+    return listInbounds().find((row) => row.path === path && row.transport !== 'xhttp')
       || null;
   }
 
@@ -136,74 +100,7 @@ function attachProxy(server, listInbounds, internalPortForRow) {
     req.pipe(upstreamReq);
   }
 
-  /**
-   * Entry point for every accepted TCP connection (see server.js,
-   * which listens via a plain net.Server and calls this instead of
-   * letting the http.Server listen itself). Peeks at the connection's
-   * first bytes looking for a `raw` inbound's camouflage request line
-   * (`METHOD /path HTTP/1.1`, matched on path only, same as the other
-   * transports). On a match, the socket is piped straight to that
-   * inbound's internal port, replaying whatever was already buffered
-   * — the http.Server never sees these bytes. Anything else (no
-   * match, timeout, or malformed data) is handed to the http.Server
-   * unchanged, exactly as if that server had accepted the connection
-   * itself.
-   */
-  function handleConnection(socket) {
-    let buffered = Buffer.alloc(0);
-    let settled = false;
-
-    const timer = setTimeout(() => finish(null), RAW_SNIFF_TIMEOUT_MS);
-
-    function finish(inbound) {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      socket.removeListener('data', onData);
-      socket.removeListener('error', onSocketError);
-      socket.removeListener('close', onSocketClose);
-
-      if (!inbound) {
-        if (buffered.length) socket.unshift(buffered);
-        server.emit('connection', socket);
-        return;
-      }
-
-      const upstream = net.connect(internalPortForRow(inbound), '127.0.0.1', () => {
-        upstream.write(buffered);
-        socket.pipe(upstream);
-        upstream.pipe(socket);
-      });
-      upstream.on('error', () => socket.destroy());
-      socket.on('error', () => upstream.destroy());
-    }
-
-    function onSocketError() { finish(null); }
-    function onSocketClose() { finish(null); }
-
-    function onData(chunk) {
-      buffered = Buffer.concat([buffered, chunk]);
-
-      const headerEnd = buffered.indexOf('\r\n\r\n');
-      if (headerEnd === -1) {
-        if (buffered.length > RAW_SNIFF_MAX_BYTES) finish(null);
-        return;
-      }
-
-      const firstLineEnd = buffered.indexOf('\r\n');
-      const requestLine = buffered.slice(0, firstLineEnd).toString('utf8');
-      const match = /^\S+\s+(\S+)\s+HTTP\/\d\.\d$/.exec(requestLine);
-      const path = match ? match[1].split('?')[0] : null;
-
-      finish(path ? findRawInboundForPath(path) : null);
-    }
-
-    socket.on('data', onData);
-    socket.on('error', onSocketError);
-    socket.on('close', onSocketClose);
-  }
-
-  return { xhttpMiddleware, handleConnection };
+  return { xhttpMiddleware };
 }
 
 module.exports = { attachProxy };

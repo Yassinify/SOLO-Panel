@@ -13,7 +13,7 @@ const { ALPN_VARIANTS, FINGERPRINTS } = require('./utils');
 // getEnabledFingerprints() instead of isRowEnabled().
 const MODE_DIMENSIONS = {
   protocol: ['vless', 'trojan'],
-  transport: ['ws', 'xhttp', 'httpupgrade', 'raw'],
+  transport: ['ws', 'xhttp', 'httpupgrade'],
   alpn: ALPN_VARIANTS,
   fingerprint: FINGERPRINTS,
 };
@@ -36,7 +36,7 @@ function configKey(dimension, value) {
 // Human-friendly labels for the toggle UI (dashboard.ejs).
 const MODE_LABELS = {
   protocol: { vless: 'VLESS', trojan: 'Trojan' },
-  transport: { ws: 'WebSocket', xhttp: 'XHTTP', httpupgrade: 'HTTP Upgrade', raw: 'Raw (camouflaged TCP)' },
+  transport: { ws: 'WebSocket', xhttp: 'XHTTP', httpupgrade: 'HTTP Upgrade' },
   alpn: { 'http/1.1': 'HTTP/1.1', h2: 'HTTP/2' },
   fingerprint: { chrome: 'Chrome', firefox: 'Firefox', safari: 'Safari', ios: 'iOS', android: 'Android', randomized: 'Randomized' },
 };

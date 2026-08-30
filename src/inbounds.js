@@ -7,7 +7,7 @@
 const crypto = require('crypto');
 const { db, getConfigValue, setConfigValue } = require('./db');
 const { getCore, listCores } = require('./cores');
-const { generatePath, generateRawHttpPath } = require('./utils');
+const { generatePath } = require('./utils');
 const { getModeState, isRowEnabled } = require('./modes');
 
 // Every (core x protocol x transport) combo this panel generates.
@@ -17,7 +17,7 @@ const { getModeState, isRowEnabled } = require('./modes');
 const CORE_COMBOS = {
   xray: {
     protocols: ['vless', 'trojan'],
-    transports: ['ws', 'xhttp', 'httpupgrade', 'raw'],
+    transports: ['ws', 'xhttp', 'httpupgrade'],
   },
 };
 
@@ -74,7 +74,7 @@ function ensureGeneratedInbounds() {
               core,
               protocol,
               transport,
-              transport === 'raw' ? generateRawHttpPath() : generatePath(),
+              generatePath(),
               creds.client_uuid || null,
               creds.trojan_password || null,
               creds.ss_method || null,
@@ -88,9 +88,9 @@ function ensureGeneratedInbounds() {
     insertAll();
   }
 
-  // REALITY was removed entirely (2026-08-30) -- one-time cleanup of
-  // any leftover row from before that removal.
-  db.prepare("DELETE FROM inbounds WHERE transport = 'reality'").run();
+  // REALITY and raw were removed entirely -- one-time cleanup of any
+  // leftover rows from before those removals.
+  db.prepare("DELETE FROM inbounds WHERE transport IN ('reality', 'raw')").run();
 }
 
 // Unguessable token for the single combined subscription URL
