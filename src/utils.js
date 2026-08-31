@@ -65,26 +65,6 @@ function currentRegion() {
     : { flag: '\u{1F310}', name: 'Unknown', iso2: null };
 }
 
-// Short, plain-language explanations for technical connection fields,
-// shown next to each field in the Subscription Web Panel.
-const TECH_EXPLANATIONS = {
-  core: 'The underlying proxy engine that handles this connection.',
-  protocol: 'The proxy protocol this link uses to carry your traffic.',
-  transport: 'How the connection is wrapped so it blends in with normal web traffic.',
-  security: 'Whether the connection is encrypted end-to-end.',
-  tls: 'The encryption layer that protects your traffic in transit, provided by Railway\u2019s network edge.',
-  sni: 'The server name sent during the secure handshake, used to route your connection to the right host.',
-  alpn: 'Used to negotiate which application protocol (e.g. HTTP/2) the secure connection will speak.',
-  fingerprint: 'Makes the connection\u2019s handshake resemble a specific browser, so it looks like ordinary traffic.',
-  location: 'The physical region this deployment is running in.',
-  status: 'Whether this endpoint is currently reachable and responding normally.',
-};
-
-// Explanation text for one technical field key, or '' if unknown.
-function explainField(key) {
-  return TECH_EXPLANATIONS[key] || '';
-}
-
 module.exports = {
   formatBytes,
   QR_ICON_SVG,
@@ -94,5 +74,4 @@ module.exports = {
   regionFlag,
   regionName,
   currentRegion,
-  explainField,
 };

@@ -22,9 +22,12 @@ const { formatBytes, QR_ICON_SVG, currentRegion } = require('./utils');
 const { MODE_DIMENSIONS, getModeState, setModeState, isRowEnabled, emptyDimensions, labelForMode, getEnabledAlpnValues, getEnabledFingerprints } = require('./modes');
 const { getLimits, setLimits, getUsageSummary } = require('./subscriptionLimits');
 
-// The public host clients connect to.
+// The public host clients connect to. Prefers an admin-set custom
+// domain (PUBLIC_DOMAIN) if configured, since RAILWAY_PUBLIC_DOMAIN
+// always holds the original *.up.railway.app domain and does not
+// update when a custom domain is attached in Railway.
 function externalHostFor(req) {
-  return process.env.RAILWAY_PUBLIC_DOMAIN || req.get('host');
+  return process.env.PUBLIC_DOMAIN || process.env.RAILWAY_PUBLIC_DOMAIN || req.get('host');
 }
 
 // Distinguishes a browser from a VPN client app, so one subscription
