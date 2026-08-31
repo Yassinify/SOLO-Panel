@@ -113,8 +113,8 @@ Everything below is optional -- the panel runs with zero variables set.
 | `SESSION_SECRET` | auto-generated, persisted in `app_config` | Only set this if you need a fixed value across redeploys/instances sharing a DB. |
 | `DATA_DIR`       | `RAILWAY_VOLUME_MOUNT_PATH` or `./data` | Set explicitly only if you're not relying on Railway's own Volume-mount env var. |
 | `XRAY_VERSION`   | latest GitHub release at install time | Pin for reproducible builds. |
-| `PUBLIC_DOMAIN`  | unset                              | Set this to your custom domain after attaching one in Railway (Settings -> Networking -> Public Networking -> Custom Domain), so generated links use it. Checked before `RAILWAY_PUBLIC_DOMAIN`, which does NOT update automatically when a custom domain is attached. |
-| `RAILWAY_PUBLIC_DOMAIN` | set by Railway            | Used as the host in every generated link (`externalHostFor()`) when `PUBLIC_DOMAIN` isn't set; falls back to the request's `Host` header if neither is set (e.g. local dev). Not something you set yourself. |
+| `PUBLIC_DOMAIN`  | unset                              | Fallback only — generated links normally match whichever domain the request actually came in on (Railway's or a custom domain you've attached in Railway's Settings -> Networking -> Public Networking). Used only if the Host header is ever missing. |
+| `RAILWAY_PUBLIC_DOMAIN` | set by Railway            | Last-resort fallback in `externalHostFor()`, after the request's `Host` header and `PUBLIC_DOMAIN`. Not something you set yourself. |
 | `RAILWAY_REPLICA_REGION` | set by Railway           | Drives the region flag/name prefixed onto every link remark (`src/utils.js`'s `REGION_FLAGS` -- 4 regions mapped by prefix, globe emoji fallback otherwise). Not something you set yourself. |
 
 ## Deploy

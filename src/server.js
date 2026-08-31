@@ -22,12 +22,13 @@ const { formatBytes, QR_ICON_SVG, currentRegion } = require('./utils');
 const { MODE_DIMENSIONS, getModeState, setModeState, isRowEnabled, emptyDimensions, labelForMode, getEnabledAlpnValues, getEnabledFingerprints } = require('./modes');
 const { getLimits, setLimits, getUsageSummary } = require('./subscriptionLimits');
 
-// The public host clients connect to. Prefers an admin-set custom
-// domain (PUBLIC_DOMAIN) if configured, since RAILWAY_PUBLIC_DOMAIN
-// always holds the original *.up.railway.app domain and does not
-// update when a custom domain is attached in Railway.
+// The public host clients connect to. Uses whichever domain the
+// request actually came in on (Railway's or a custom PUBLIC_DOMAIN),
+// so generated links always match the domain that was visited. Falls
+// back to PUBLIC_DOMAIN, then RAILWAY_PUBLIC_DOMAIN, only if the Host
+// header is somehow missing.
 function externalHostFor(req) {
-  return process.env.PUBLIC_DOMAIN || process.env.RAILWAY_PUBLIC_DOMAIN || req.get('host');
+  return req.get('host') || process.env.PUBLIC_DOMAIN || process.env.RAILWAY_PUBLIC_DOMAIN;
 }
 
 // Distinguishes a browser from a VPN client app, so one subscription
