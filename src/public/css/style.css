@@ -195,6 +195,94 @@ input[type=number]::-webkit-outer-spin-button {
 }
 input[type=number] { -moz-appearance: textfield; }
 
+/* Custom date-picker trigger (End date field) -- styled to match the
+   plain text/number inputs above, since it visually needs to sit in
+   the same form-row. */
+.date-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 16px;
+  text-align: left;
+  cursor: pointer;
+  min-height: 44px;
+}
+.date-trigger:hover, .date-trigger:focus-visible { border-color: var(--accent); outline: none; }
+.date-trigger-icon { width: 18px; height: 18px; flex-shrink: 0; color: var(--text-muted); }
+
+/* Custom calendar modal, opened from .date-trigger above. Reuses the
+   existing .modal-backdrop/.modal-box pattern (same as the QR/confirm
+   modals) so it's responsive for free -- no separate popover
+   positioning logic to write or maintain. */
+.calendar-box { max-width: 300px; }
+.calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.calendar-title { font-family: var(--font-display); font-weight: 600; font-size: 15px; }
+.calendar-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.calendar-nav-btn:hover:not(:disabled) { border-color: var(--accent); }
+.calendar-nav-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.calendar-day {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  cursor: pointer;
+}
+.calendar-day:hover:not(:disabled) { border-color: var(--accent); }
+.calendar-day:disabled { color: var(--text-muted); opacity: 0.35; cursor: not-allowed; }
+.calendar-day-empty { visibility: hidden; cursor: default; }
+.calendar-day-today { border-color: var(--border); font-weight: 600; }
+.calendar-day-selected, .calendar-day-selected:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #06231f;
+  font-weight: 600;
+}
+
 .error { color: var(--danger); font-size: 14px; margin-bottom: 12px; }
 .muted { color: var(--text-muted); font-size: 13px; }
 

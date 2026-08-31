@@ -57,8 +57,12 @@
       <h3 style="margin-bottom:4px;">Time &amp; usage limits</h3>
       <div class="form-row">
         <div style="flex:1; min-width:140px;">
-          <label>Days</label>
-          <input type="number" name="days" min="1" step="1" placeholder="Unlimited" value="<%= limitDays %>">
+          <label>End date</label>
+          <button type="button" class="date-trigger" id="endDateTrigger" onclick="openCalendar()">
+            <span id="endDateLabel">Unlimited</span>
+            <svg class="date-trigger-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+          </button>
+          <input type="hidden" name="end_date" id="endDateInput" value="<%= limitEndDate %>">
         </div>
         <div style="flex:1; min-width:140px;">
           <label>Usage limit (GB)</label>
@@ -89,6 +93,24 @@
     <div class="modal-qr" id="qr-canvas"></div>
     <div class="modal-actions">
       <button type="button" class="btn" onclick="closeQr()">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="calendar-modal" onclick="if(event.target===this) closeCalendar()">
+  <div class="modal-box calendar-box">
+    <div class="calendar-header">
+      <button type="button" class="calendar-nav-btn" id="calPrevBtn" onclick="calendarNav(-1)" aria-label="Previous month">&#8249;</button>
+      <span class="calendar-title" id="calendarTitle"></span>
+      <button type="button" class="calendar-nav-btn" onclick="calendarNav(1)" aria-label="Next month">&#8250;</button>
+    </div>
+    <div class="calendar-weekdays">
+      <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+    </div>
+    <div class="calendar-grid" id="calendarGrid"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn" onclick="selectUnlimited()">Unlimited</button>
+      <button type="button" class="btn" onclick="closeCalendar()">Cancel</button>
     </div>
   </div>
 </div>
@@ -124,7 +146,7 @@
   // whether the Apply Changes button should be enabled (see below).
   var advancedForm = document.getElementById('advancedForm');
   var modeCheckboxes = Array.prototype.slice.call(document.querySelectorAll('.mode-toggle input[type="checkbox"]'));
-  var limitInputs = Array.prototype.slice.call(advancedForm.querySelectorAll('input[type="number"]'));
+  var limitInputs = Array.prototype.slice.call(advancedForm.querySelectorAll('input[type="number"]')).concat([document.getElementById('endDateInput')]);
 
   // Snapshot of the whole form (mode checkboxes + the two limit
   // fields) as loaded from the server, used to detect whether the
@@ -168,6 +190,84 @@
   limitInputs.forEach(function (input) {
     input.addEventListener('input', refreshApplyButton);
   });
+
+  // Custom calendar date picker (End date field) -- reuses the same
+  // .modal-backdrop/.modal-box pattern as the QR/confirm modals above
+  // instead of a floating popover, so it's responsive for free.
+  var todayDateStr = '<%= todayDate %>';
+  var endDateInput = document.getElementById('endDateInput');
+  var endDateLabel = document.getElementById('endDateLabel');
+  var calendarTitle = document.getElementById('calendarTitle');
+  var calendarGrid = document.getElementById('calendarGrid');
+  var calPrevBtn = document.getElementById('calPrevBtn');
+  var MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  var calendarViewYear, calendarViewMonth;
+
+  function parseDateStr(str) {
+    var parts = str.split('-').map(Number);
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+  }
+  function formatDateStr(year, month, day) {
+    return year + '-' + String(month + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+  }
+  function updateTriggerLabel() {
+    endDateLabel.textContent = endDateInput.value
+      ? parseDateStr(endDateInput.value).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+      : 'Unlimited';
+  }
+  updateTriggerLabel();
+
+  function openCalendar() {
+    var base = parseDateStr(endDateInput.value || todayDateStr);
+    calendarViewYear = base.getFullYear();
+    calendarViewMonth = base.getMonth();
+    renderCalendar();
+    document.getElementById('calendar-modal').classList.add('open');
+  }
+  function closeCalendar() {
+    document.getElementById('calendar-modal').classList.remove('open');
+  }
+  function calendarNav(delta) {
+    calendarViewMonth += delta;
+    if (calendarViewMonth < 0) { calendarViewMonth = 11; calendarViewYear--; }
+    if (calendarViewMonth > 11) { calendarViewMonth = 0; calendarViewYear++; }
+    renderCalendar();
+  }
+  function renderCalendar() {
+    calendarTitle.textContent = MONTH_NAMES[calendarViewMonth] + ' ' + calendarViewYear;
+    var today = parseDateStr(todayDateStr);
+    var todayYear = today.getFullYear();
+    var todayMonth = today.getMonth();
+    calPrevBtn.disabled = calendarViewYear < todayYear || (calendarViewYear === todayYear && calendarViewMonth <= todayMonth);
+
+    var firstDay = new Date(calendarViewYear, calendarViewMonth, 1).getDay();
+    var daysInMonth = new Date(calendarViewYear, calendarViewMonth + 1, 0).getDate();
+    var html = '';
+    for (var i = 0; i < firstDay; i++) {
+      html += '<span class="calendar-day calendar-day-empty"></span>';
+    }
+    for (var day = 1; day <= daysInMonth; day++) {
+      var dateStr = formatDateStr(calendarViewYear, calendarViewMonth, day);
+      var isPast = dateStr < todayDateStr;
+      var classes = 'calendar-day';
+      if (dateStr === todayDateStr) classes += ' calendar-day-today';
+      if (dateStr === endDateInput.value) classes += ' calendar-day-selected';
+      html += '<button type="button" class="' + classes + '"' + (isPast ? ' disabled' : ' onclick="selectDate(\'' + dateStr + '\')"') + '>' + day + '</button>';
+    }
+    calendarGrid.innerHTML = html;
+  }
+  function selectDate(dateStr) {
+    endDateInput.value = dateStr;
+    updateTriggerLabel();
+    closeCalendar();
+    refreshApplyButton();
+  }
+  function selectUnlimited() {
+    endDateInput.value = '';
+    updateTriggerLabel();
+    closeCalendar();
+    refreshApplyButton();
+  }
 
   // Confirmation is a panel-styled modal (matching the QR modal),
   // not a native browser confirm() popup. Submitting the form opens

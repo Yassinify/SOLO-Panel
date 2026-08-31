@@ -18,6 +18,39 @@ const { attachProxy } = require('./xray/proxy');
 const statsPoller = require('./xray/statsPoller');
 const healthMonitor = require('./healthMonitor');
 const { getAllHealth } = require('./health');
+// Small shared helpers used by views (passed in as EJS locals).
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
+// Today's date as YYYY-MM-DD (local server time), for the end-date
+// picker's `min` attribute -- can't pick a date before today.
+function todayDateString() {
+  const now = new Date();
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+// Adds `days` whole days to today and returns YYYY-MM-DD, for
+// pre-filling the end-date picker with the current countdown's actual
+// end date. Returns '' for null/unlimited.
+function endDateStringFromDaysLeft(daysLeft) {
+  if (daysLeft === null) return '';
+  const d = new Date();
+  d.setDate(d.getDate() + daysLeft);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+// Converts a submitted YYYY-MM-DD end date into a day count from
+// today (date-only, ignoring time-of-day) for `setLimits({days})`.
+// Empty/missing = unlimited (null). A past-or-today date clamps to 1
+// day rather than 0, since `setLimits` treats <=0 as "unlimited" and
+// picking today shouldn't silently remove the limit entirely.
+function daysFromEndDate(endDateStr) {
+  if (!endDateStr) return null;
+  const today = new Date(todayDateString());
+  const end = new Date(endDateStr);
+  const diffDays = Math.round((end.getTime() - today.getTime()) / MS_PER_DAY);
+  return Math.max(1, diffDays);
+}
+
 const { formatBytes, QR_ICON_SVG, currentRegion } = require('./utils');
 const { MODE_DIMENSIONS, getModeState, setModeState, isRowEnabled, emptyDimensions, labelForMode, getEnabledAlpnValues, getEnabledFingerprints } = require('./modes');
 const { getLimits, setLimits, getUsageSummary } = require('./subscriptionLimits');
@@ -230,7 +263,8 @@ app.get('/', requireAuth, (req, res) => {
     modeState,
     labelForMode,
     modesError: req.query.modesError ? req.query.modesError.split(',') : null,
-    limitDays: limits.days === null ? '' : limits.days,
+    limitEndDate: endDateStringFromDaysLeft(usageSummary.daysLeft),
+    todayDate: todayDateString(),
     limitUsageGB: limits.usageGB === null ? '' : limits.usageGB,
     daysLeftText: usageSummary.unlimitedDays ? 'Unlimited' : `${usageSummary.daysLeft} Days`,
     usageLeftText: usageSummary.unlimitedUsage ? 'Unlimited' : formatBytes(usageSummary.usageLeftBytes),
@@ -262,7 +296,7 @@ app.post('/settings/advanced', requireAuth, requireCsrf, async (req, res) => {
   const modesChanged = JSON.stringify(getModeState()) !== JSON.stringify(newState);
 
   setModeState(newState);
-  setLimits({ days: req.body.days, usageGB: req.body.usage_gb });
+  setLimits({ days: daysFromEndDate(req.body.end_date), usageGB: req.body.usage_gb });
 
   if (modesChanged) {
     await inbounds.reloadCores(); // only restart cores when a mode actually changed

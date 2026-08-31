@@ -2,6 +2,7 @@
 'use strict';
 
 const crypto = require('crypto');
+const https = require('https');
 
 // Format a byte count as a human-readable string (e.g. "1.3 GB").
 function formatBytes(bytes) {
@@ -30,6 +31,48 @@ function generatePath() {
 const ALPN_VARIANTS = ['http/1.1', 'h2'];
 const FINGERPRINTS = ['chrome', 'firefox', 'safari', 'ios', 'android', 'randomized'];
 
+// Cached result of the once-at-boot IP geolocation lookup below.
+// null until the lookup succeeds; stays null forever if it fails, in
+// which case currentRegion() falls back to the Railway-region logic.
+let ipRegion = null;
+
+// Builds a flag emoji from a 2-letter ISO country code (e.g. 'nl' ->
+// the Netherlands flag), by mapping each letter to its Unicode
+// Regional Indicator Symbol.
+function flagEmojiFromIso2(iso2) {
+  return [...iso2.toUpperCase()].map((c) => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)).join('');
+}
+
+// Looks up this server's own public IP's country once at boot (not
+// per-request, to avoid an external call + delay on every panel
+// view), so the dashboard/subscription panel's Location flag is
+// correct from the very first boot -- unlike RAILWAY_REPLICA_REGION,
+// which can lag behind on a freshly changed region until Railway
+// actually redeploys the container. Failure just leaves `ipRegion`
+// null, so currentRegion() silently falls back to the region-based
+// logic below.
+function detectRegionByIp() {
+  const req = https.get('https://ipwho.is/', { timeout: 5000 }, (res) => {
+    let body = '';
+    res.on('data', (chunk) => { body += chunk; });
+    res.on('end', () => {
+      try {
+        const data = JSON.parse(body);
+        if (data.success !== false && data.country && data.country_code) {
+          ipRegion = { flag: flagEmojiFromIso2(data.country_code), name: data.country, iso2: data.country_code.toLowerCase() };
+        }
+      } catch {
+        // Malformed response -- leave ipRegion null, fall back.
+      }
+    });
+  });
+  req.on('timeout', () => req.destroy());
+  req.on('error', () => {
+    // Network error / API unreachable -- leave ipRegion null, fall back.
+  });
+}
+detectRegionByIp();
+
 // Country flag for the Railway region this deployment runs in, keyed
 // by RAILWAY_REPLICA_REGION's prefix (full identifier can carry a
 // datacenter suffix, e.g. `us-east4-eqdc4a`).
@@ -55,9 +98,13 @@ function regionName() {
 }
 
 // Country this deployment is running in (name + iso2 for a flag
-// image, since flag emoji don't render on some platforms). iso2 is
-// null in the fallback case.
+// image, since flag emoji don't render on some platforms). Prefers
+// the once-at-boot IP geolocation result (see detectRegionByIp()
+// above); falls back to RAILWAY_REPLICA_REGION matching, then a
+// globe/Unknown placeholder if neither is available. iso2 is null
+// only in that final fallback case.
 function currentRegion() {
+  if (ipRegion) return ipRegion;
   const region = process.env.RAILWAY_REPLICA_REGION || '';
   const match = REGION_FLAGS.find((r) => region.startsWith(r.prefix));
   return match
