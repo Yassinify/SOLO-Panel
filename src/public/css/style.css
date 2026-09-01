@@ -219,7 +219,7 @@ h2 {
   border-color: var(--accent);
   color: #06231f;
   font-weight: 600;
-  border-radius: var(--radius-capsule);
+  border-radius: var(--radius-md);
   padding: 10px 26px;
   box-shadow: var(--shadow-sm);
 }
@@ -266,7 +266,7 @@ h2 {
   border: 2px solid var(--accent);
   color: var(--accent);
   font-weight: 600;
-  border-radius: var(--radius-capsule);
+  border-radius: var(--radius-md);
   padding: 9px 26px;
 }
 .btn-apply:active:not(:disabled) {
@@ -425,7 +425,7 @@ input[type="number"] {
   justify-content: center;
   width: 44px;
   height: 44px;
-  border-radius: var(--radius-capsule);
+  border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: var(--surface-alt);
   color: var(--text);
@@ -464,7 +464,7 @@ input[type="number"] {
   align-items: center;
   justify-content: center;
   aspect-ratio: 1;
-  border-radius: var(--radius-capsule);
+  border-radius: var(--radius-md);
   border: 1px solid transparent;
   background: transparent;
   color: var(--text);
@@ -1019,7 +1019,7 @@ input[type="number"] {
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  border-radius: var(--radius-capsule);
+  border-radius: var(--radius-md);
   border: 1px solid var(--border);
   background: var(--surface-alt);
   color: var(--text);
