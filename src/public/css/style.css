@@ -248,13 +248,13 @@ input[type=number] { -moz-appearance: textfield; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   border-radius: var(--radius);
   border: 1px solid var(--border);
   background: var(--surface-alt);
   color: var(--text);
-  font-size: 18px;
+  font-size: 20px;
   line-height: 1;
   cursor: pointer;
 }
@@ -477,6 +477,31 @@ input[type=number] { -moz-appearance: textfield; }
   .qr-icon-btn svg { width: 22px; height: 22px; }
   .btn { padding: 13px 22px; font-size: 15px; }
   .btn-small { padding: 8px 14px; font-size: 13px; }
+
+  /* Change Password button (topbar): the full text label doesn't fit
+     the topbar's shrunk flex column on narrow screens (topbar-side
+     has flex:1, so its content area is much narrower than the full
+     viewport once the centered brand takes the middle) -- collapse it
+     to an icon-only square button, same footprint as .qr-icon-btn,
+     matching the Log out button's own compact size. The label stays
+     in the DOM (sr-only, not display:none) so it's still announced by
+     screen readers and still provides the button's accessible name. */
+  .btn-icon-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .btn-icon {
+    padding: 10px;
+    min-width: 44px;
+    justify-content: center;
+  }
   .mode-toggle { padding: 10px 16px; }
 
   /* Force the Location/Subscription URL row to stack on phones via an
