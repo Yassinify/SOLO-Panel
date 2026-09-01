@@ -45,7 +45,7 @@ URL could log in. Before sharing your panel, set a real password:
 ### 4. Open your panel
 
 Once deployed, open your Railway service's public URL in a browser
-and log in. From the dashboard, copy your **Subscription URL** — this
+and sign in. From the dashboard, copy your **Subscription URL** — this
 is the one link you paste into any VPN client app (or open in a
 browser to see connection status).
 
