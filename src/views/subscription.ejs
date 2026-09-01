@@ -8,20 +8,19 @@
   </div>
 
   <div class="card">
-    <p class="muted" style="margin:0 0 8px;">Status <span class="health-badge health-<%= systemStatus %>"><%= systemStatus === 'healthy' ? 'Operational' : systemStatus === 'degraded' ? 'Degraded' : 'Unavailable' %></span></p>
     <p class="muted" style="margin:0 0 8px; display:flex; align-items:center; gap:8px;">
       <span>Location</span>
       <% if (location.iso2) { %>
-        <img class="location-flag" src="https://flagcdn.com/w20/<%= location.iso2 %>.png" srcset="https://flagcdn.com/w40/<%= location.iso2 %>.png 2x" width="20" alt="<%= location.name %> flag" style="display:block; border-radius:2px; flex-shrink:0; height:auto;">
+        <img class="location-flag" src="https://flagcdn.com/<%= location.iso2 %>.svg" width="20" alt="<%= location.name %> flag" style="display:block; border-radius:2px; flex-shrink:0; height:auto;">
       <% } else { %>
         <span><%= location.flag %></span>
       <% } %>
       <span><%= location.name %></span>
     </p>
-    <p class="muted" style="margin:0 0 8px;">Endpoints &nbsp;<%= activeCount %> / <%= totalCount %> active</p>
     <p class="muted" style="margin:0;">📅 <%= daysLeftText %>&nbsp;&nbsp;📊 <%= usageLeftText %></p>
 
-    <label style="margin-top:18px;">Subscription URL</label>
+    <label style="margin-top:18px; margin-bottom:2px;">Your Connection Link</label>
+    <p class="muted" style="margin:0 0 8px;">Copy this into your VPN app, or scan the QR code.</p>
     <div class="link-box">
       <code id="sub-raw" tabindex="0" role="button" aria-label="Copy subscription URL to clipboard" title="Click to copy" onclick="copyLink('sub-raw')"><%= subLink %></code>
       <button type="button" class="btn btn-small qr-icon-btn" title="Show QR" aria-label="Show QR code for subscription URL" onclick="showQr('sub-raw')"><%- qrIconSvg %></button>
@@ -35,7 +34,6 @@
       <details class="endpoint-card">
         <summary style="cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
           <span><strong><%= ep.label %></strong></span>
-          <span class="health-badge health-<%= ep.health.status %>"><%= ep.health.status %></span>
         </summary>
 
         <% if (ep.link) { %>
@@ -63,12 +61,6 @@
           <div class="detail-row">
             <div class="detail-label">Security</div>
             <div class="detail-value">TLS</div>
-          </div>
-          <div class="detail-row">
-            <div class="detail-label">Status</div>
-            <div class="detail-value">
-              <%= ep.health.status %><% if (ep.health.latencyMs !== null && ep.health.latencyMs !== undefined) { %> &mdash; <%= ep.health.latencyMs %>ms<% } %>
-            </div>
           </div>
         </div>
 

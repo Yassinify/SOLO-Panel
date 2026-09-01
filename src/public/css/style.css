@@ -136,13 +136,63 @@ a:hover {
   flex-shrink: 0;
 }
 
+/* GitHub repo link (topbar, left side) -- same circular icon-button
+   look as .profile-trigger on the right, so the topbar reads as
+   balanced. */
+.github-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-capsule);
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  color: var(--text);
+  transition:
+    border-color 0.15s ease,
+    transform 0.1s ease;
+}
+.github-link:hover,
+.github-link:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+  text-decoration: none;
+}
+.github-link:active {
+  transform: scale(0.95);
+}
+.github-link-svg {
+  width: 20px;
+  height: 20px;
+}
+
 /* Profile menu (topbar) -- single avatar-style icon button that opens
    a GitHub-style dropdown with Change Password / Sign out, replacing
    the two separate always-visible topbar buttons. */
 .profile-menu {
   position: relative;
+  z-index: 160;
+}
+/* Dims and softly blurs the rest of the page while the profile
+   dropdown is open, so the open menu reads as the focused thing on
+   screen (same idea as the QR/password modal backdrop, but lighter --
+   this isn't a blocking modal, just a menu). */
+.profile-menu-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(4, 7, 13, 0.35);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  z-index: 140;
+}
+.profile-menu-overlay.open {
+  display: block;
 }
 .profile-trigger {
+  position: relative;
+  z-index: 150;
   display: inline-flex;
   align-items: center;
   justify-content: center;
