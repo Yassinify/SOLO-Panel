@@ -235,24 +235,30 @@ app.post('/logout', requireCsrf, (req, res) => {
   });
 });
 
-// Change the single admin account's password. Requires re-entering
-// the current password (not just an active session) before accepting
-// a new one, same as a normal "change password" flow.
+// Change the single admin account's password. AJAX endpoint (called
+// via fetch from the modal in dashboard.ejs, not a normal form POST):
+// returns JSON so the modal can show an inline alert on failure
+// without navigating away/closing itself. On success the session is
+// destroyed immediately -- the admin must log back in with the new
+// password, so there's no stale session using a since-changed
+// password hash.
 app.post('/settings/password', requireAuth, requireCsrf, (req, res) => {
   const { current_password, new_password, confirm_password } = req.body;
 
   if (!verifyLogin(current_password)) {
-    return res.redirect('/?pwError=current');
+    return res.status(400).json({ error: 'current' });
   }
   if (!new_password || new_password.length < 4) {
-    return res.redirect('/?pwError=short');
+    return res.status(400).json({ error: 'short' });
   }
   if (new_password !== confirm_password) {
-    return res.redirect('/?pwError=mismatch');
+    return res.status(400).json({ error: 'mismatch' });
   }
 
   updatePassword(new_password);
-  res.redirect('/?pwSuccess=1');
+  req.session.destroy(() => {
+    res.json({ success: true });
+  });
 });
 
 app.get('/', requireAuth, (req, res) => {
@@ -296,8 +302,6 @@ app.get('/', requireAuth, (req, res) => {
     modeState,
     labelForMode,
     modesError: req.query.modesError ? req.query.modesError.split(',') : null,
-    pwError: req.query.pwError || null,
-    pwSuccess: req.query.pwSuccess === '1',
     limitEndDate: endDateStringFromDaysLeft(usageSummary.daysLeft),
     todayDate: todayDateString(),
     limitUsageGB: limits.usageGB === null ? '' : limits.usageGB,

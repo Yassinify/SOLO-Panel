@@ -19,17 +19,6 @@
     </div>
   <% } %>
 
-  <% if (pwError) { %>
-    <div class="card card-danger">
-      <p style="margin:0;"><strong><%= pwError === 'current' ? 'Current password is incorrect.' : pwError === 'mismatch' ? "New password and confirmation don't match." : 'New password must be at least 4 characters.' %></strong></p>
-    </div>
-  <% } %>
-  <% if (pwSuccess) { %>
-    <div class="card" style="border-color: var(--accent);">
-      <p style="margin:0;"><strong>Password changed successfully.</strong></p>
-    </div>
-  <% } %>
-
   <div class="card">
     <label class="sub-header-row">
       <span>Subscription URL</span>
@@ -100,7 +89,7 @@
 <div class="modal-backdrop" id="password-modal" onclick="if(event.target===this) closePasswordModal()">
   <div class="modal-box">
     <h3>Change Password</h3>
-    <form method="POST" action="/settings/password">
+    <form method="POST" action="/settings/password" id="passwordForm">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
       <label style="text-align:left;">Current password</label>
       <input type="password" name="current_password" required autocomplete="current-password">
@@ -110,7 +99,7 @@
       <input type="password" name="confirm_password" required minlength="4" autocomplete="new-password">
       <div class="modal-actions" style="margin-top:16px;">
         <button type="button" class="btn" onclick="closePasswordModal()">Cancel</button>
-        <button type="submit" class="btn btn-accent">Change Password</button>
+        <button type="submit" class="btn btn-accent" id="passwordSubmitBtn">Change Password</button>
       </div>
     </form>
   </div>
@@ -146,7 +135,31 @@
 </div>
 
 <div class="toast" id="copy-toast" role="status" aria-live="polite">Copied to clipboard</div>
+<div class="notification-container" id="notification-container" aria-live="polite"></div>
 <script>
+  function showNotification(message, type) {
+    var container = document.getElementById('notification-container');
+    var el = document.createElement('div');
+    el.className = 'notification' + (type === 'error' ? ' notification-error' : '');
+    el.innerHTML =
+      '<span class="notification-message"></span>' +
+      '<button type="button" class="notification-close" aria-label="Dismiss">' +
+      '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" /></svg>' +
+      '</button>';
+    el.querySelector('.notification-message').textContent = message;
+    container.appendChild(el);
+
+    function dismiss() {
+      el.classList.remove('show');
+      setTimeout(function () { el.remove(); }, 200);
+    }
+    el.querySelector('.notification-close').addEventListener('click', dismiss);
+    var autoTimer = setTimeout(dismiss, 4000);
+    el.addEventListener('mouseenter', function () { clearTimeout(autoTimer); });
+
+    requestAnimationFrame(function () { el.classList.add('show'); });
+  }
+
   function copyLink(elementId) {
     const text = document.getElementById(elementId).textContent;
     navigator.clipboard.writeText(text).then(function () {
@@ -207,7 +220,7 @@
         var anyStillChecked = Array.prototype.some.call(groupInputs, function (input) { return input.checked; });
         if (!anyStillChecked) {
           this.checked = true;
-          alert('At least one option must stay enabled in this section.');
+          showNotification('At least one option must stay enabled in this section.', 'error');
           refreshApplyButton();
           return;
         }
@@ -322,7 +335,52 @@
   }
   function closePasswordModal() {
     document.getElementById('password-modal').classList.remove('open');
+    document.getElementById('passwordForm').reset();
   }
+
+  // AJAX submit: on any failure (wrong current password, mismatch,
+  // too short) the modal stays open and an alert explains why -- the
+  // form is never submitted as a normal navigation. On success the
+  // server has already destroyed the session, so reloading the page
+  // lands back on /login (requireAuth redirect) for the admin to log
+  // in again with the new password.
+  var passwordForm = document.getElementById('passwordForm');
+  passwordForm.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var newPassword = passwordForm.new_password.value;
+    var confirmPassword = passwordForm.confirm_password.value;
+    if (newPassword !== confirmPassword) {
+      showNotification('New password and confirmation do not match.', 'error');
+      return;
+    }
+
+    var submitBtn = document.getElementById('passwordSubmitBtn');
+    submitBtn.disabled = true;
+    fetch('/settings/password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams(new FormData(passwordForm)),
+    })
+      .then(function (res) { return res.json().then(function (data) { return { ok: res.ok, data: data }; }); })
+      .then(function (result) {
+        submitBtn.disabled = false;
+        if (!result.ok) {
+          var messages = {
+            current: 'Current password is incorrect.',
+            short: 'New password must be at least 4 characters.',
+            mismatch: 'New password and confirmation do not match.',
+          };
+          showNotification(messages[result.data.error] || 'Could not change password.', 'error');
+          return;
+        }
+        showNotification('Password changed successfully.', 'success');
+        setTimeout(function () { location.reload(); }, 1200);
+      })
+      .catch(function () {
+        submitBtn.disabled = false;
+        showNotification('Could not change password. Please try again.', 'error');
+      });
+  });
 
   function showQr(elementId) {
     const text = document.getElementById(elementId).textContent;

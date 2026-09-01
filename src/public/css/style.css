@@ -1,12 +1,23 @@
 /* SOLO Panel design tokens.
    Palette: deep navy/slate surface with a single teal signal color
    (status of inbounds/clients is the thing an admin scans for first,
-   so it gets the one saturated accent; everything else stays quiet). */
+   so it gets the one saturated accent; everything else stays quiet).
+   Corner radii follow an Apple HIG-style scale: capsule (fully round)
+   for primary actions and pill chips, a refined ~14px for secondary/
+   tertiary controls and inputs, and a softer ~20px for cards/modals
+   so containers read as concentric with the controls inside them.
+   `corner-shape: squircle` is layered on top of `border-radius` as a
+   progressive enhancement -- it's a newly proposed CSS property that
+   renders Apple's continuous (superellipse) corner curve in browsers
+   that support it, and is silently ignored (falling back to the
+   plain circular-arc radius) everywhere else. */
 :root {
   --bg: #0a0f1a;
   --surface: #111a2c;
   --surface-alt: #182437;
+  --surface-glass: rgba(17, 26, 44, 0.78);
   --border: #24314a;
+  --border-soft: rgba(231, 236, 246, 0.08);
   --text: #e7ecf6;
   --text-muted: #8a99b8;
   --accent: #33d9c4;
@@ -14,8 +25,15 @@
   --danger: #e5626a;
   --warning: #e8b34a;
   --radius: 8px;
-  --font-display: "Roboto", system-ui, sans-serif;
-  --font-body: "Roboto", system-ui, -apple-system, sans-serif;
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-capsule: 999px;
+  --shadow-sm: 0 1px 2px rgba(2, 4, 8, 0.5), 0 1px 1px rgba(2, 4, 8, 0.3);
+  --shadow-md: 0 12px 28px rgba(2, 4, 8, 0.45);
+  --shadow-lg: 0 24px 60px rgba(2, 4, 8, 0.55);
+  --font-display: "Roboto", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  --font-body: "Roboto", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", Menlo, monospace;
 }
 
@@ -143,8 +161,10 @@ h2 {
 
 .card {
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  corner-shape: squircle;
+  box-shadow: var(--shadow-sm);
   padding: 24px;
   margin-bottom: 20px;
 }
@@ -161,11 +181,16 @@ h2 {
   font-size: 14px;
   font-weight: 500;
   padding: 10px 18px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
+  corner-shape: squircle;
   border: 1px solid var(--border);
   background: var(--surface-alt);
   color: var(--text);
   cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.1s ease;
   /* 44px is the standard minimum touch-target size -- applied at
      every screen size (not just mobile) since tablets and touch
      laptops need it too, and it doesn't hurt mouse-driven desktop use. */
@@ -175,11 +200,17 @@ h2 {
   border-color: var(--accent);
   text-decoration: none;
 }
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
 .btn-accent {
   background: var(--accent);
   border-color: var(--accent);
   color: #06231f;
   font-weight: 600;
+  border-radius: var(--radius-capsule);
+  padding: 10px 26px;
+  box-shadow: var(--shadow-sm);
 }
 .btn-accent:hover {
   background: var(--accent-strong);
@@ -202,6 +233,8 @@ h2 {
   border: 2px solid var(--accent);
   color: var(--accent);
   font-weight: 600;
+  border-radius: var(--radius-capsule);
+  padding: 9px 26px;
 }
 .btn-apply:hover:not(:disabled) {
   background: var(--accent);
@@ -265,9 +298,11 @@ select {
   padding: 10px 12px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
+  corner-shape: squircle;
   color: var(--text);
   font-family: var(--font-body);
+  transition: border-color 0.15s ease;
   /* 16px, not smaller: any focused input under 16px makes iOS Safari
      auto-zoom the whole page, on a phone or a tablet -- applied at
      every screen size so it can never regress on any device. */
@@ -287,6 +322,7 @@ input[type="number"]::-webkit-outer-spin-button {
   margin: 0;
 }
 input[type="number"] {
+  appearance: textfield;
   -moz-appearance: textfield;
 }
 
@@ -302,13 +338,15 @@ input[type="number"] {
   padding: 10px 12px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
+  corner-shape: squircle;
   color: var(--text);
   font-family: var(--font-body);
   font-size: 16px;
   text-align: left;
   cursor: pointer;
   min-height: 44px;
+  transition: border-color 0.15s ease;
 }
 .date-trigger:hover,
 .date-trigger:focus-visible {
@@ -346,13 +384,19 @@ input[type="number"] {
   justify-content: center;
   width: 44px;
   height: 44px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-capsule);
   border: 1px solid var(--border);
   background: var(--surface-alt);
   color: var(--text);
   font-size: 20px;
   line-height: 1;
   cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    transform 0.1s ease;
+}
+.calendar-nav-btn:active:not(:disabled) {
+  transform: scale(0.94);
 }
 .calendar-nav-btn:hover:not(:disabled) {
   border-color: var(--accent);
@@ -379,13 +423,20 @@ input[type="number"] {
   align-items: center;
   justify-content: center;
   aspect-ratio: 1;
-  border-radius: var(--radius);
+  border-radius: var(--radius-capsule);
   border: 1px solid transparent;
   background: transparent;
   color: var(--text);
   font-family: var(--font-body);
   font-size: 14px;
   cursor: pointer;
+  transition:
+    background 0.12s ease,
+    border-color 0.12s ease,
+    transform 0.1s ease;
+}
+.calendar-day:active:not(:disabled) {
+  transform: scale(0.92);
 }
 .calendar-day:hover:not(:disabled) {
   border-color: var(--accent);
@@ -446,7 +497,8 @@ input[type="number"] {
   align-items: center;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
+  corner-shape: squircle;
   padding: 8px 10px;
   margin-top: 6px;
   width: 100%;
@@ -489,11 +541,14 @@ input[type="number"] {
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%) translateY(20px);
-  background: var(--surface-alt);
-  border: 1px solid var(--accent);
+  background: var(--surface-glass);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid var(--border-soft);
   color: var(--text);
   padding: 10px 18px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-capsule);
+  box-shadow: var(--shadow-md);
   font-size: 13px;
   opacity: 0;
   pointer-events: none;
@@ -512,7 +567,9 @@ input[type="number"] {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(4, 7, 13, 0.72);
+  background: rgba(4, 7, 13, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   align-items: center;
   justify-content: center;
   z-index: 100;
@@ -522,20 +579,33 @@ input[type="number"] {
   display: flex;
 }
 .modal-box {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: var(--surface-glass);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  corner-shape: squircle;
+  box-shadow: var(--shadow-lg);
   padding: 24px;
   width: 100%;
   max-width: 320px;
   text-align: center;
+  transform: scale(0.96);
+  opacity: 0;
+  transition:
+    transform 0.18s ease,
+    opacity 0.18s ease;
+}
+.modal-backdrop.open .modal-box {
+  transform: scale(1);
+  opacity: 1;
 }
 .modal-box h3 {
   margin-bottom: 4px;
 }
 .modal-qr {
   background: #fff;
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   padding: 14px;
   display: inline-flex;
   align-items: center;
@@ -565,7 +635,7 @@ input[type="number"] {
   text-transform: uppercase;
   letter-spacing: 0.03em;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-capsule);
   border: 1px solid var(--border);
   vertical-align: middle;
 }
@@ -614,13 +684,17 @@ input[type="number"] {
    tappable, matching the hover treatment already used on .btn/.mode-toggle. */
 .endpoint-card {
   margin-top: 14px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-lg);
+  corner-shape: squircle;
   padding: 14px;
-  transition: border-color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 .endpoint-card:hover {
   border-color: var(--accent);
+  box-shadow: var(--shadow-sm);
 }
 
 /* Responsive: narrow viewports (phones) */
@@ -792,6 +866,73 @@ input[type="number"] {
   }
 }
 
+/* Corner notification popups (replaces alert() for validation/
+   success messages e.g. "Password changed successfully.") -- stacked
+   top-right, each with a close (X) button and colored left border by
+   type. Auto-dismiss after a few seconds, or closed manually. */
+.notification-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 300;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: min(340px, calc(100vw - 40px));
+}
+.notification {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--surface-glass);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-md);
+  corner-shape: squircle;
+  padding: 12px 12px 12px 14px;
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  transform: translateX(16px);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+.notification.show {
+  opacity: 1;
+  transform: translateX(0);
+}
+.notification-error {
+  border-left-color: var(--danger);
+}
+.notification-message {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.4;
+}
+.notification-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.notification-close:hover {
+  color: var(--text);
+}
+.notification-close svg {
+  width: 16px;
+  height: 16px;
+}
+
 /* Step list used inside warning/info cards (e.g. the persistent-
    storage setup steps) -- numbered, roomy, with inline <code> pills
    for keyboard shortcuts so the steps stay easy to scan. */
@@ -837,7 +978,7 @@ input[type="number"] {
   align-items: center;
   gap: 6px;
   padding: 8px 16px;
-  border-radius: 999px;
+  border-radius: var(--radius-capsule);
   border: 1px solid var(--border);
   background: var(--surface-alt);
   color: var(--text);
@@ -848,9 +989,13 @@ input[type="number"] {
   transition:
     background 0.15s ease,
     border-color 0.15s ease,
-    color 0.15s ease;
+    color 0.15s ease,
+    transform 0.1s ease;
   /* Same 44px minimum touch target as .btn, at every screen size. */
   min-height: 44px;
+}
+.mode-toggle:active {
+  transform: scale(0.97);
 }
 .mode-toggle:hover {
   border-color: var(--accent);
