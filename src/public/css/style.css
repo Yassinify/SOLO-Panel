@@ -1074,11 +1074,10 @@ input[type="number"] {
   background: var(--surface-glass);
   backdrop-filter: blur(20px) saturate(160%);
   -webkit-backdrop-filter: blur(20px) saturate(160%);
-  border: 1px solid var(--border-soft);
-  border-left: 3px solid var(--accent);
+  border: 1px solid var(--accent);
   border-radius: var(--radius-md);
   corner-shape: squircle;
-  padding: 12px 12px 12px 14px;
+  padding: 12px 14px;
   box-shadow: var(--shadow-md);
   opacity: 0;
   transform: translateX(16px);
@@ -1091,7 +1090,7 @@ input[type="number"] {
   transform: translateX(0);
 }
 .notification-error {
-  border-left-color: var(--danger);
+  border-color: var(--danger);
 }
 .notification-message {
   flex: 1;

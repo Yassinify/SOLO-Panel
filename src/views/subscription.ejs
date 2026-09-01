@@ -9,7 +9,6 @@
 
   <div class="card">
     <p class="muted" style="margin:0 0 8px; display:flex; align-items:center; gap:8px;">
-      <span>Location</span>
       <% if (location.iso2) { %>
         <img class="location-flag" src="https://flagcdn.com/<%= location.iso2 %>.svg" width="20" alt="<%= location.name %> flag" style="display:block; border-radius:2px; flex-shrink:0; height:auto;">
       <% } else { %>
@@ -19,8 +18,6 @@
     </p>
     <p class="muted" style="margin:0;">📅 <%= daysLeftText %>&nbsp;&nbsp;📊 <%= usageLeftText %></p>
 
-    <label style="margin-top:18px; margin-bottom:2px;">Your Connection Link</label>
-    <p class="muted" style="margin:0 0 8px;">Copy this into your VPN app, or scan the QR code.</p>
     <div class="link-box">
       <code id="sub-raw" tabindex="0" role="button" aria-label="Copy subscription URL to clipboard" title="Click to copy" onclick="copyLink('sub-raw')"><%= subLink %></code>
       <button type="button" class="btn btn-small qr-icon-btn" title="Show QR" aria-label="Show QR code for subscription URL" onclick="showQr('sub-raw')"><%- qrIconSvg %></button>
