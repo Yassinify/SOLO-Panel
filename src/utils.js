@@ -19,6 +19,14 @@ function formatBytes(bytes) {
 const BYTES_PER_GB = 1024 ** 3;
 const BYTES_PER_MB = 1024 ** 2;
 
+// Converts an admin-entered usage-limit GB value to bytes for
+// enforcement/display. GB->MB is decimal (1 GB = 1000 MB) so e.g.
+// 0.01 GB always converts to an exact 10 MB, matching what the admin
+// typed; MB->bytes stays binary (1024^2) for actual byte-level math.
+function usageLimitGbToBytes(gb) {
+  return gb * 1000 * BYTES_PER_MB;
+}
+
 // Shared by subscriptionLimits.js's countdown math and server.js's
 // end-date picker conversions.
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -36,8 +44,8 @@ function formatGbOrMb(bytes) {
 // total limit is under 1GB, both sides switch to MB (matching units)
 // instead of showing e.g. "225 MB / 0.5 GB".
 function formatUsagePair(usedBytes, totalGB) {
-  const totalBytes = totalGB * BYTES_PER_GB;
-  if (totalBytes < BYTES_PER_GB) {
+  const totalBytes = usageLimitGbToBytes(totalGB);
+  if (totalGB < 1) {
     return `${((usedBytes || 0) / BYTES_PER_MB).toFixed(2)} MB / ${(totalBytes / BYTES_PER_MB).toFixed(2)} MB`;
   }
   return `${formatBytes(usedBytes)} / ${totalGB} GB`;
@@ -161,6 +169,7 @@ module.exports = {
   QR_ICON_SVG,
   generatePath,
   BYTES_PER_GB,
+  usageLimitGbToBytes,
   MS_PER_DAY,
   ALPN_VARIANTS,
   FINGERPRINTS,

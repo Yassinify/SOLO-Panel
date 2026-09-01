@@ -4,7 +4,7 @@
 'use strict';
 
 const { getConfigValue, setConfigValue } = require('./db');
-const { BYTES_PER_GB, MS_PER_DAY } = require('./utils');
+const { usageLimitGbToBytes, MS_PER_DAY } = require('./utils');
 
 // '' means "explicitly set to unlimited"; null means "never set" (both unlimited here).
 function isUnsetOrEmpty(value) {
@@ -56,7 +56,7 @@ function getUsageSummary(totalUsedBytes) {
   let usageLeftBytes = null;
   let usagePercentLeft = null;
   if (!unlimitedUsage) {
-    const totalBytes = limits.usageGB * BYTES_PER_GB;
+    const totalBytes = usageLimitGbToBytes(limits.usageGB);
     usageLeftBytes = Math.max(0, totalBytes - totalUsedBytes);
     usagePercentLeft = totalBytes > 0 ? usageLeftBytes / totalBytes : 0;
   }

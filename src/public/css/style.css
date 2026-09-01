@@ -136,6 +136,101 @@ a:hover {
   flex-shrink: 0;
 }
 
+/* Profile menu (topbar) -- single avatar-style icon button that opens
+   a GitHub-style dropdown with Change Password / Sign out, replacing
+   the two separate always-visible topbar buttons. */
+.profile-menu {
+  position: relative;
+}
+.profile-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: var(--radius-capsule);
+  border: 1px solid var(--border);
+  background: var(--surface-alt);
+  color: var(--text);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    transform 0.1s ease;
+}
+.profile-trigger:hover,
+.profile-trigger:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+.profile-trigger:active {
+  transform: scale(0.95);
+}
+.profile-trigger-svg {
+  width: 22px;
+  height: 22px;
+}
+.profile-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 200px;
+  background: var(--surface-glass);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  corner-shape: squircle;
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  z-index: 150;
+  transform-origin: top right;
+  opacity: 0;
+  transform: scale(0.95) translateY(-4px);
+  pointer-events: none;
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
+}
+.profile-dropdown.open {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+  pointer-events: auto;
+}
+.profile-dropdown-form {
+  margin: 0;
+}
+/* Same interactive-row look for both the plain <button> (Change
+   Password) and the <button type="submit"> inside the logout <form>
+   (Sign out), so the two menu items are visually identical. */
+.profile-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 14px;
+  text-align: left;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.profile-dropdown-item:hover,
+.profile-dropdown-item:focus-visible {
+  background: var(--border-soft);
+  outline: none;
+}
+.profile-dropdown-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
 .container {
   max-width: 980px;
   margin: 0 auto;
