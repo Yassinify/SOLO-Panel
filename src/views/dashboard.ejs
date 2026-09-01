@@ -19,6 +19,17 @@
     </div>
   <% } %>
 
+  <% if (pwError) { %>
+    <div class="card card-danger">
+      <p style="margin:0;"><strong><%= pwError === 'current' ? 'Current password is incorrect.' : pwError === 'mismatch' ? "New password and confirmation don't match." : 'New password must be at least 4 characters.' %></strong></p>
+    </div>
+  <% } %>
+  <% if (pwSuccess) { %>
+    <div class="card" style="border-color: var(--accent);">
+      <p style="margin:0;"><strong>Password changed successfully.</strong></p>
+    </div>
+  <% } %>
+
   <div class="card">
     <label class="sub-header-row">
       <span>Subscription URL</span>
@@ -83,6 +94,25 @@
       <button type="button" class="btn" onclick="closeConfirmModal()">Cancel</button>
       <button type="button" class="btn btn-apply" onclick="confirmApply()">Apply Changes</button>
     </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="password-modal" onclick="if(event.target===this) closePasswordModal()">
+  <div class="modal-box">
+    <h3>Change Password</h3>
+    <form method="POST" action="/settings/password">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label style="text-align:left;">Current password</label>
+      <input type="password" name="current_password" required autocomplete="current-password">
+      <label style="text-align:left;">New password</label>
+      <input type="password" name="new_password" required minlength="4" autocomplete="new-password">
+      <label style="text-align:left;">Confirm new password</label>
+      <input type="password" name="confirm_password" required minlength="4" autocomplete="new-password">
+      <div class="modal-actions" style="margin-top:16px;">
+        <button type="button" class="btn" onclick="closePasswordModal()">Cancel</button>
+        <button type="submit" class="btn btn-accent">Change Password</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -285,6 +315,13 @@
   }
   function closeConfirmModal() {
     document.getElementById('confirm-modal').classList.remove('open');
+  }
+
+  function openPasswordModal() {
+    document.getElementById('password-modal').classList.add('open');
+  }
+  function closePasswordModal() {
+    document.getElementById('password-modal').classList.remove('open');
   }
 
   function showQr(elementId) {

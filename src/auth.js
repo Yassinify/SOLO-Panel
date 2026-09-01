@@ -32,6 +32,12 @@ function verifyLogin(password) {
   return { id: user.id };
 }
 
+// Overwrites the single admin account's password hash.
+function updatePassword(newPassword) {
+  const passwordHash = bcrypt.hashSync(newPassword, SALT_ROUNDS);
+  db.prepare('UPDATE admin_users SET password_hash = ?').run(passwordHash);
+}
+
 // Middleware: require a logged-in session, else redirect to /login.
 function requireAuth(req, res, next) {
   if (req.session && req.session.adminId) {
@@ -61,6 +67,7 @@ function requireCsrf(req, res, next) {
 module.exports = {
   seedAdminFromEnv,
   verifyLogin,
+  updatePassword,
   requireAuth,
   getOrCreateCsrfToken,
   requireCsrf,

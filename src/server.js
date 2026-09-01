@@ -7,7 +7,7 @@ const express = require('express');
 const session = require('express-session');
 const { getOrCreateSessionSecret } = require('./db'); // also initializes SQLite DB and tables on startup
 const { version: APP_VERSION } = require('../package.json');
-const { seedAdminFromEnv, verifyLogin, requireAuth, getOrCreateCsrfToken, requireCsrf } = require('./auth');
+const { seedAdminFromEnv, verifyLogin, updatePassword, requireAuth, getOrCreateCsrfToken, requireCsrf } = require('./auth');
 const SqliteSessionStore = require('./sessionStore');
 const inbounds = require('./inbounds');
 const { listCores } = require('./cores');
@@ -51,7 +51,7 @@ function daysFromEndDate(endDateStr) {
   return Math.max(1, diffDays);
 }
 
-const { formatBytes, QR_ICON_SVG, currentRegion } = require('./utils');
+const { formatBytes, formatGbOrMb, formatUsagePair, QR_ICON_SVG, currentRegion } = require('./utils');
 const { MODE_DIMENSIONS, getModeState, setModeState, isRowEnabled, emptyDimensions, labelForMode, getEnabledAlpnValues, getEnabledFingerprints } = require('./modes');
 const { getLimits, setLimits, getUsageSummary } = require('./subscriptionLimits');
 
@@ -128,10 +128,23 @@ function sendRawSubscription(req, res) {
   // client app's server list shows days-left/usage-left directly.
   const usageSummary = getUsageSummary(inbounds.getTotalTrafficBytes());
   const usageInfoLink = buildUsageInfoLink(
-    `\ud83d\udcc5 ${usageSummary.unlimitedDays ? 'Unlimited' : `${usageSummary.daysLeft} Days`}  \ud83d\udcca ${usageSummary.unlimitedUsage ? 'Unlimited' : `${formatBytes(usageSummary.usageUsedBytes)} / ${usageSummary.usageTotalGB} GB`}`
+    `\ud83d\udcc5 ${usageSummary.unlimitedDays ? 'Unlimited' : `${usageSummary.daysLeft} Days`}  \ud83d\udcca ${usageSummary.unlimitedUsage ? 'Unlimited' : formatUsagePair(usageSummary.usageUsedBytes, usageSummary.usageTotalGB)}`
   );
 
-  res.type('text/plain').send(Buffer.from([usageInfoLink, ...links].join('\n')).toString('base64'));
+  // Extra warning entries, only shown once the limit is actually close:
+  // <=10% of the usage cap left, or fewer than 5 days left. Each is its
+  // own dummy config entry (same non-functional pattern as usageInfoLink)
+  // so it's impossible to miss in a client app's server list.
+  const warningLinks = [];
+  if (!usageSummary.unlimitedUsage && usageSummary.usagePercentLeft <= 0.1) {
+    warningLinks.push(buildUsageInfoLink(`\ud83d\udd34\ud83d\udd34 ${formatGbOrMb(usageSummary.usageLeftBytes)} remaining`));
+  }
+  if (!usageSummary.unlimitedDays && usageSummary.daysLeft < 5) {
+    const dayWord = usageSummary.daysLeft === 1 ? 'day' : 'days';
+    warningLinks.push(buildUsageInfoLink(`\ud83d\udd34\ud83d\udd34 ${usageSummary.daysLeft} ${dayWord} left`));
+  }
+
+  res.type('text/plain').send(Buffer.from([usageInfoLink, ...warningLinks, ...links].join('\n')).toString('base64'));
 }
 
 function sendSubscriptionPanel(req, res, subId) {
@@ -172,7 +185,7 @@ function sendSubscriptionPanel(req, res, subId) {
     totalCount: endpoints.length,
     systemStatus,
     daysLeftText: usageSummary.unlimitedDays ? 'Unlimited' : `${usageSummary.daysLeft} Days`,
-    usageLeftText: usageSummary.unlimitedUsage ? 'Unlimited' : `${formatBytes(usageSummary.usageUsedBytes)} / ${usageSummary.usageTotalGB} GB`,
+    usageLeftText: usageSummary.unlimitedUsage ? 'Unlimited' : formatUsagePair(usageSummary.usageUsedBytes, usageSummary.usageTotalGB),
     qrIconSvg: QR_ICON_SVG,
   });
 }
@@ -222,6 +235,26 @@ app.post('/logout', requireCsrf, (req, res) => {
   });
 });
 
+// Change the single admin account's password. Requires re-entering
+// the current password (not just an active session) before accepting
+// a new one, same as a normal "change password" flow.
+app.post('/settings/password', requireAuth, requireCsrf, (req, res) => {
+  const { current_password, new_password, confirm_password } = req.body;
+
+  if (!verifyLogin(current_password)) {
+    return res.redirect('/?pwError=current');
+  }
+  if (!new_password || new_password.length < 4) {
+    return res.redirect('/?pwError=short');
+  }
+  if (new_password !== confirm_password) {
+    return res.redirect('/?pwError=mismatch');
+  }
+
+  updatePassword(new_password);
+  res.redirect('/?pwSuccess=1');
+});
+
 app.get('/', requireAuth, (req, res) => {
   const externalHost = externalHostFor(req);
   const health = getAllHealth();
@@ -263,6 +296,8 @@ app.get('/', requireAuth, (req, res) => {
     modeState,
     labelForMode,
     modesError: req.query.modesError ? req.query.modesError.split(',') : null,
+    pwError: req.query.pwError || null,
+    pwSuccess: req.query.pwSuccess === '1',
     limitEndDate: endDateStringFromDaysLeft(usageSummary.daysLeft),
     todayDate: todayDateString(),
     limitUsageGB: limits.usageGB === null ? '' : limits.usageGB,

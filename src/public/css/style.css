@@ -73,9 +73,23 @@ a:hover { text-decoration: underline; }
   display: flex;
   align-items: center;
 }
-.topbar-side.topbar-user { justify-content: flex-end; }
+.topbar-side.topbar-user { justify-content: flex-end; flex-wrap: wrap; }
 
 .topbar-user { color: var(--text-muted); font-size: 14px; gap: 14px; }
+
+/* Icon + label buttons (e.g. Change Password) -- icon stays a fixed
+   size regardless of .btn's own responsive padding/font-size changes
+   across breakpoints, so it never scales oddly relative to the text. */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-icon-svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
 
 .container { max-width: 980px; margin: 0 auto; padding: 32px 24px 64px; }
 

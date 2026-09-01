@@ -16,6 +16,29 @@ function formatBytes(bytes) {
   return `${value.toFixed(decimals)} ${units[exponent]}`;
 }
 
+const BYTES_PER_GB = 1024 ** 3;
+const BYTES_PER_MB = 1024 ** 2;
+
+// A byte count as GB (>=1GB) or MB (<1GB) only -- unlike formatBytes()
+// this never drops to KB/B, used for usage-limit displays/warnings
+// where only GB/MB are meaningful units.
+function formatGbOrMb(bytes) {
+  const value = Math.max(0, bytes || 0);
+  if (value >= BYTES_PER_GB) return `${(value / BYTES_PER_GB).toFixed(2)} GB`;
+  return `${(value / BYTES_PER_MB).toFixed(2)} MB`;
+}
+
+// Formats a "used / total" usage pair for display. If the admin's
+// total limit is under 1GB, both sides switch to MB (matching units)
+// instead of showing e.g. "225 MB / 0.5 GB".
+function formatUsagePair(usedBytes, totalGB) {
+  const totalBytes = totalGB * BYTES_PER_GB;
+  if (totalBytes < BYTES_PER_GB) {
+    return `${((usedBytes || 0) / BYTES_PER_MB).toFixed(2)} MB / ${(totalBytes / BYTES_PER_MB).toFixed(2)} MB`;
+  }
+  return `${formatBytes(usedBytes)} / ${totalGB} GB`;
+}
+
 // QR icon used on share-link buttons. Fill is currentColor so it follows button text color.
 const QR_ICON_SVG = `<svg viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
 <path d="M5.6,4A1.6,1.6,0,0,0,4,5.6V12h8V4ZM10,10H6V6h4Z"></path><path d="M4,30.4A1.6,1.6,0,0,0,5.6,32H12V24H4ZM6,26h4v4H6Z"></path><path d="M24,32h6.4A1.6,1.6,0,0,0,32,30.4V24H24Zm2-6h4v4H26Z"></path><path d="M30.4,4H24v8h8V5.6A1.6,1.6,0,0,0,30.4,4ZM30,10H26V6h4Z"></path><polygon points="20 10 20 8 16 8 16 12 18 12 18 10 20 10"></polygon><rect x="12" y="12" width="2" height="2"></rect><rect x="14" y="14" width="4" height="2"></rect><polygon points="20 6 20 8 22 8 22 4 14 4 14 8 16 8 16 6 20 6"></polygon><rect x="4" y="14" width="2" height="4"></rect><polygon points="12 16 12 18 10 18 10 14 8 14 8 18 6 18 6 20 4 20 4 22 8 22 8 20 10 20 10 22 12 22 12 20 14 20 14 16 12 16"></polygon><polygon points="20 16 22 16 22 18 24 18 24 16 26 16 26 14 22 14 22 10 20 10 20 12 18 12 18 14 20 14 20 16"></polygon><polygon points="18 30 14 30 14 32 22 32 22 30 20 30 20 28 18 28 18 30"></polygon><polygon points="22 20 22 18 20 18 20 16 18 16 18 18 16 18 16 20 18 20 18 22 20 22 20 20 22 20"></polygon><rect x="30" y="20" width="2" height="2"></rect><rect x="22" y="20" width="6" height="2"></rect><polygon points="30 14 28 14 28 16 26 16 26 18 28 18 28 20 30 20 30 18 32 18 32 16 30 16 30 14"></polygon><rect x="20" y="22" width="2" height="6"></rect><polygon points="14 28 16 28 16 26 18 26 18 24 16 24 16 20 14 20 14 28"></polygon>
@@ -114,6 +137,8 @@ function currentRegion() {
 
 module.exports = {
   formatBytes,
+  formatGbOrMb,
+  formatUsagePair,
   QR_ICON_SVG,
   generatePath,
   ALPN_VARIANTS,

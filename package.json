@@ -1,6 +1,6 @@
 {
   "name": "solo-panel",
-  "version": "1.3.2",
+  "version": "1.3.3",
   "description": "Node.js web panel for managing Xray-core inbounds, deployable on Railway.com",
   "private": true,
   "main": "src/server.js",
