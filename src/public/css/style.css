@@ -113,7 +113,7 @@ a:hover {
 .topbar-user {
   color: var(--text-muted);
   font-size: 14px;
-  gap: 14px;
+  gap: 16px;
 }
 
 /* Icon + label buttons (e.g. Change Password) -- icon stays a fixed
@@ -128,7 +128,7 @@ a:hover {
 .btn.btn-icon {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 .btn-icon-svg {
   width: 16px;
@@ -661,9 +661,10 @@ input[type="number"] {
 }
 .modal-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 10px;
-  margin-top: 8px;
+  gap: 12px;
+  margin-top: 20px;
 }
 
 /* Health status badges (docs/product-vision.md rule 10). Small text
