@@ -118,8 +118,14 @@ a:hover {
 
 /* Icon + label buttons (e.g. Change Password) -- icon stays a fixed
    size regardless of .btn's own responsive padding/font-size changes
-   across breakpoints, so it never scales oddly relative to the text. */
-.btn-icon {
+   across breakpoints, so it never scales oddly relative to the text.
+   `.btn.btn-icon` (two classes) intentionally outranks the plain
+   `.btn` rule below on specificity, since `.btn` also sets its own
+   `display` and is defined later in this file -- without the extra
+   specificity here, source order would let `.btn`'s display win and
+   the icon/label would fall back to plain inline flow instead of a
+   flex row. */
+.btn.btn-icon {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -190,6 +196,7 @@ h2 {
   transition:
     background 0.15s ease,
     border-color 0.15s ease,
+    box-shadow 0.15s ease,
     transform 0.1s ease;
   /* 44px is the standard minimum touch-target size -- applied at
      every screen size (not just mobile) since tablets and touch
@@ -203,6 +210,10 @@ h2 {
 .btn:active:not(:disabled) {
   transform: scale(0.97);
 }
+.btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 .btn-accent {
   background: var(--accent);
   border-color: var(--accent);
@@ -215,11 +226,33 @@ h2 {
 .btn-accent:hover {
   background: var(--accent-strong);
   border-color: var(--accent-strong);
+  box-shadow: var(--shadow-md);
+}
+.btn-accent:active:not(:disabled) {
+  box-shadow: none;
 }
 .btn-small {
   padding: 5px 10px;
   font-size: 12px;
   min-height: 40px;
+}
+
+/* Tertiary buttons -- lowest visual weight, for dismissive actions
+   that sit beside a stronger primary/secondary action (modal Cancel/
+   Close buttons). No border or fill at rest, unlike .btn's own
+   filled-gray secondary look; a soft tinted background only appears
+   on hover/press, which is the native Apple pattern for a plain
+   (borderless) button. */
+.btn-tertiary {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.btn-tertiary:hover {
+  background: var(--border-soft);
+  border-color: transparent;
+  color: var(--text);
 }
 
 /* "Apply Changes" (mode toggles) -- deliberately NOT a solid accent
@@ -235,6 +268,11 @@ h2 {
   font-weight: 600;
   border-radius: var(--radius-capsule);
   padding: 9px 26px;
+}
+.btn-apply:active:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: #06231f;
 }
 .btn-apply:hover:not(:disabled) {
   background: var(--accent);
@@ -303,6 +341,9 @@ select {
   color: var(--text);
   font-family: var(--font-body);
   transition: border-color 0.15s ease;
+  /* Matches .date-trigger's own min-height so the End date button and
+     Usage limit (GB) input line up at the same height side by side. */
+  min-height: 44px;
   /* 16px, not smaller: any focused input under 16px makes iOS Safari
      auto-zoom the whole page, on a phone or a tablet -- applied at
      every screen size so it can never regress on any device. */

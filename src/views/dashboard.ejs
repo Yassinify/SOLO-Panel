@@ -80,7 +80,7 @@
     <h3>Apply changes?</h3>
     <p class="muted">This saves your mode selections and time/usage limits. If any mode changed, affected proxy engines will restart and you'll need to update your subscription in your client app afterwards.</p>
     <div class="modal-actions">
-      <button type="button" class="btn" onclick="closeConfirmModal()">Cancel</button>
+      <button type="button" class="btn btn-tertiary" onclick="closeConfirmModal()">Cancel</button>
       <button type="button" class="btn btn-apply" onclick="confirmApply()">Apply Changes</button>
     </div>
   </div>
@@ -98,7 +98,7 @@
       <label style="text-align:left;">Confirm new password</label>
       <input type="password" name="confirm_password" required minlength="4" autocomplete="new-password">
       <div class="modal-actions" style="margin-top:16px;">
-        <button type="button" class="btn" onclick="closePasswordModal()">Cancel</button>
+        <button type="button" class="btn btn-tertiary" onclick="closePasswordModal()">Cancel</button>
         <button type="submit" class="btn btn-accent" id="passwordSubmitBtn">Change Password</button>
       </div>
     </form>
@@ -111,7 +111,7 @@
     <p class="muted">Open your VPN client app and scan this code.</p>
     <div class="modal-qr" id="qr-canvas"></div>
     <div class="modal-actions">
-      <button type="button" class="btn" onclick="closeQr()">Close</button>
+      <button type="button" class="btn btn-tertiary" onclick="closeQr()">Close</button>
     </div>
   </div>
 </div>
@@ -129,7 +129,7 @@
     <div class="calendar-grid" id="calendarGrid"></div>
     <div class="modal-actions">
       <button type="button" class="btn" onclick="selectUnlimited()">Unlimited</button>
-      <button type="button" class="btn" onclick="closeCalendar()">Cancel</button>
+      <button type="button" class="btn btn-tertiary" onclick="closeCalendar()">Cancel</button>
     </div>
   </div>
 </div>
