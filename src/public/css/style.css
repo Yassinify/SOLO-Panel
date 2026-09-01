@@ -472,7 +472,7 @@ input[type=number] { -moz-appearance: textfield; }
      and are also below a comfortable touch-target size. Bump them up
      for phones only; desktop/tablet sizing is unchanged. */
   .card { padding: 20px; }
-  .location-flag { width: 34px; height: 26px; }
+  .location-flag { width: 30px; height: auto; }
   .qr-icon-btn { padding: 12px; }
   .qr-icon-btn svg { width: 22px; height: 22px; }
   .btn { padding: 13px 22px; font-size: 15px; }

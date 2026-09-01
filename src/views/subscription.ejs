@@ -12,7 +12,7 @@
     <p class="muted" style="margin:0 0 4px; display:flex; align-items:center; gap:8px;">
       <span>Location</span>
       <% if (location.iso2) { %>
-        <img class="location-flag" src="https://flagcdn.com/24x18/<%= location.iso2 %>.png" srcset="https://flagcdn.com/48x36/<%= location.iso2 %>.png 2x" width="24" height="18" alt="<%= location.name %> flag" style="display:block; border-radius:2px; flex-shrink:0;">
+        <img class="location-flag" src="https://flagcdn.com/w20/<%= location.iso2 %>.png" srcset="https://flagcdn.com/w40/<%= location.iso2 %>.png 2x" width="20" alt="<%= location.name %> flag" style="display:block; border-radius:2px; flex-shrink:0; height:auto;">
       <% } else { %>
         <span><%= location.flag %></span>
       <% } %>

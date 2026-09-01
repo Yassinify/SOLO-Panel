@@ -106,8 +106,16 @@ const REGION_FLAGS = [
   { prefix: 'asia-southeast', flag: '\u{1F1F8}\u{1F1EC}', name: 'Singapore', country: 'Singapore', iso2: 'sg' }, // Southeast Asia Metal (Singapore)
 ];
 
-// Flag emoji for the current Railway region, or '' if undetermined.
+// Flag emoji for this deployment's detected region, or '' if
+// undetermined. Prefers the once-at-boot IP geolocation result (see
+// detectRegionByIp() above) -- same priority as currentRegion() --
+// since RAILWAY_REPLICA_REGION can lag behind on a freshly deployed
+// region until Railway actually restarts the container, which
+// previously left generated config remarks without a flag on first
+// run even though the panel's own Location display (currentRegion())
+// already had one.
 function regionFlag() {
+  if (ipRegion) return ipRegion.flag;
   const region = process.env.RAILWAY_REPLICA_REGION || '';
   const match = REGION_FLAGS.find((r) => region.startsWith(r.prefix));
   return match ? match.flag : '';
