@@ -725,11 +725,11 @@ input[type="number"] {
    Hover/focus border shifts to the accent color so the cards read as
    tappable, matching the hover treatment already used on .btn/.mode-toggle. */
 .endpoint-card {
-  margin-top: 14px;
+  margin-top: 18px;
   border: 1px solid var(--border-soft);
   border-radius: var(--radius-lg);
   corner-shape: squircle;
-  padding: 14px;
+  padding: 18px;
   transition:
     border-color 0.15s ease,
     box-shadow 0.15s ease;
@@ -846,7 +846,7 @@ input[type="number"] {
   flex-wrap: wrap;
   align-items: baseline;
   gap: 2px 12px;
-  padding: 7px 0;
+  padding: 10px 0;
   border-bottom: 1px solid var(--border);
 }
 .detail-row:last-child {
@@ -1012,7 +1012,7 @@ input[type="number"] {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 10px;
-  margin-bottom: 4px;
+  margin-bottom: 8px;
 }
 .mode-toggle {
   position: relative;

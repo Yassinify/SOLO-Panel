@@ -6,8 +6,8 @@
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
+const { DATA_DIR } = require('../db');
 
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, '..', '..', 'data');
 const CONFIG_PATH = path.join(DATA_DIR, 'xray-config.json');
 const XRAY_BIN_PATH = process.env.XRAY_BIN_PATH || path.join(__dirname, '..', '..', 'bin', 'xray');
 

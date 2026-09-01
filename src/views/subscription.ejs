@@ -8,8 +8,8 @@
   </div>
 
   <div class="card">
-    <p class="muted" style="margin:0 0 4px;">Status <span class="health-badge health-<%= systemStatus %>"><%= systemStatus === 'healthy' ? 'Operational' : systemStatus === 'degraded' ? 'Degraded' : 'Unavailable' %></span></p>
-    <p class="muted" style="margin:0 0 4px; display:flex; align-items:center; gap:8px;">
+    <p class="muted" style="margin:0 0 8px;">Status <span class="health-badge health-<%= systemStatus %>"><%= systemStatus === 'healthy' ? 'Operational' : systemStatus === 'degraded' ? 'Degraded' : 'Unavailable' %></span></p>
+    <p class="muted" style="margin:0 0 8px; display:flex; align-items:center; gap:8px;">
       <span>Location</span>
       <% if (location.iso2) { %>
         <img class="location-flag" src="https://flagcdn.com/w20/<%= location.iso2 %>.png" srcset="https://flagcdn.com/w40/<%= location.iso2 %>.png 2x" width="20" alt="<%= location.name %> flag" style="display:block; border-radius:2px; flex-shrink:0; height:auto;">
@@ -18,7 +18,7 @@
       <% } %>
       <span><%= location.name %></span>
     </p>
-    <p class="muted" style="margin:0 0 4px;">Endpoints &nbsp;<%= activeCount %> / <%= totalCount %> active</p>
+    <p class="muted" style="margin:0 0 8px;">Endpoints &nbsp;<%= activeCount %> / <%= totalCount %> active</p>
     <p class="muted" style="margin:0;">📅 <%= daysLeftText %>&nbsp;&nbsp;📊 <%= usageLeftText %></p>
 
     <label style="margin-top:18px;">Subscription URL</label>
@@ -82,11 +82,9 @@
 
 <div class="modal-backdrop" id="qr-modal" onclick="if(event.target===this) closeQr()">
   <div class="modal-box">
-    <h3>Scan to import</h3>
-    <p class="muted">Open your VPN client app and scan this code.</p>
     <div class="modal-qr" id="qr-canvas"></div>
     <div class="modal-actions">
-      <button type="button" class="btn" onclick="closeQr()">Close</button>
+      <button type="button" class="btn btn-tertiary" onclick="closeQr()">Close</button>
     </div>
   </div>
 </div>

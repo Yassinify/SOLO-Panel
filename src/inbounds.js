@@ -7,17 +7,19 @@
 const crypto = require('crypto');
 const { db, getConfigValue, setConfigValue } = require('./db');
 const { getCore, listCores } = require('./cores');
-const { generatePath } = require('./utils');
+const { generatePath, PROTOCOLS, TRANSPORTS } = require('./utils');
 const { getModeState, isRowEnabled } = require('./modes');
 
 // Every (core x protocol x transport) combo this panel generates.
 // Credentials are shared per protocol across transports. Order here
 // is also seeding order, so it determines each row's internal port
-// (see xray/config.js).
+// (see xray/config.js). protocols/transports share a single source
+// of truth with modes.js's MODE_DIMENSIONS (see utils.js's
+// PROTOCOLS/TRANSPORTS).
 const CORE_COMBOS = {
   xray: {
-    protocols: ['vless', 'trojan'],
-    transports: ['ws', 'xhttp', 'httpupgrade'],
+    protocols: PROTOCOLS,
+    transports: TRANSPORTS,
   },
 };
 

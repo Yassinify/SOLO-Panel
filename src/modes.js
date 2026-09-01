@@ -5,15 +5,16 @@
 'use strict';
 
 const { getConfigValue, setConfigValue } = require('./db');
-const { ALPN_VARIANTS, FINGERPRINTS } = require('./utils');
+const { ALPN_VARIANTS, FINGERPRINTS, PROTOCOLS, TRANSPORTS } = require('./utils');
 
-// Toggleable values per dimension. Kept in sync with inbounds.js's
-// CORE_COMBOS. alpn/fingerprint aren't row attributes (see
+// Toggleable values per dimension. protocol/transport share a single
+// source of truth with inbounds.js's CORE_COMBOS (see utils.js's
+// PROTOCOLS/TRANSPORTS). alpn/fingerprint aren't row attributes (see
 // xray/links.js) -- consulted via getEnabledAlpnValues()/
 // getEnabledFingerprints() instead of isRowEnabled().
 const MODE_DIMENSIONS = {
-  protocol: ['vless', 'trojan'],
-  transport: ['ws', 'xhttp', 'httpupgrade'],
+  protocol: PROTOCOLS,
+  transport: TRANSPORTS,
   alpn: ALPN_VARIANTS,
   fingerprint: FINGERPRINTS,
 };

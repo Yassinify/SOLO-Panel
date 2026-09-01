@@ -6,18 +6,10 @@
 'use strict';
 
 const { ALPN_VARIANTS, FINGERPRINTS, regionFlag } = require('../utils');
+const { labelForMode } = require('../modes');
 
 // Railway gives every service one HTTPS domain on the standard port.
 const EXTERNAL_PORT = 443;
-
-const FINGERPRINT_LABELS = {
-  chrome: 'Chrome',
-  firefox: 'Firefox',
-  safari: 'Safari',
-  ios: 'iOS',
-  android: 'Android',
-  randomized: 'Randomized',
-};
 
 // Grouping label for one DB row (used on the dashboard, which lists
 // rows, not individual link variants).
@@ -30,7 +22,7 @@ function labelForInbound(inbound) {
 function remarkFor(inbound, alpn, fingerprint) {
   const flag = regionFlag();
   const prefix = flag ? `${flag} ` : '';
-  const fpLabel = FINGERPRINT_LABELS[fingerprint] || fingerprint;
+  const fpLabel = labelForMode('fingerprint', fingerprint);
   return `${prefix}${inbound.protocol.toUpperCase()} - ${inbound.transport.toUpperCase()} - ${alpn} - ${fpLabel}`;
 }
 

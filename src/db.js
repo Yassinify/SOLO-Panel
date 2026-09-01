@@ -135,4 +135,4 @@ db.exec(`
   );
 `);
 
-module.exports = { db, getOrCreateSessionSecret, getConfigValue, setConfigValue };
+module.exports = { db, DATA_DIR, getOrCreateSessionSecret, getConfigValue, setConfigValue };

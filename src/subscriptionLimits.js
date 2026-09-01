@@ -4,9 +4,7 @@
 'use strict';
 
 const { getConfigValue, setConfigValue } = require('./db');
-
-const BYTES_PER_GB = 1024 ** 3;
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const { BYTES_PER_GB, MS_PER_DAY } = require('./utils');
 
 // '' means "explicitly set to unlimited"; null means "never set" (both unlimited here).
 function isUnsetOrEmpty(value) {

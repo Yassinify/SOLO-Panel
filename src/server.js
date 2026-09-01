@@ -18,9 +18,6 @@ const { attachProxy } = require('./xray/proxy');
 const statsPoller = require('./xray/statsPoller');
 const healthMonitor = require('./healthMonitor');
 const { getAllHealth } = require('./health');
-// Small shared helpers used by views (passed in as EJS locals).
-const MS_PER_DAY = 24 * 60 * 60 * 1000;
-
 // Today's date as YYYY-MM-DD (local server time), for the end-date
 // picker's `min` attribute -- can't pick a date before today.
 function todayDateString() {
@@ -51,7 +48,7 @@ function daysFromEndDate(endDateStr) {
   return Math.max(1, diffDays);
 }
 
-const { formatBytes, formatGbOrMb, formatUsagePair, QR_ICON_SVG, currentRegion } = require('./utils');
+const { formatBytes, formatGbOrMb, formatUsagePair, QR_ICON_SVG, currentRegion, MS_PER_DAY } = require('./utils');
 const { MODE_DIMENSIONS, getModeState, setModeState, isRowEnabled, emptyDimensions, labelForMode, getEnabledAlpnValues, getEnabledFingerprints } = require('./modes');
 const { getLimits, setLimits, getUsageSummary } = require('./subscriptionLimits');
 

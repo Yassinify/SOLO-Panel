@@ -39,7 +39,7 @@
     <form method="POST" action="/settings/advanced" id="advancedForm">
       <input type="hidden" name="_csrf" value="<%= csrfToken %>">
 
-      <h3 style="margin-bottom:4px;">Modes</h3>
+      <h3 style="margin-bottom:8px;">Modes</h3>
       <% Object.entries(modeDimensions).forEach(([dimension, values]) => { %>
         <label style="text-transform: capitalize;"><%= dimension %></label>
         <div class="mode-grid">
@@ -54,7 +54,7 @@
 
       <hr class="section-divider">
 
-      <h3 style="margin-bottom:4px;">Time &amp; usage limits</h3>
+      <h3 style="margin-bottom:8px;">Time &amp; usage limits</h3>
       <div class="form-row">
         <div style="flex:1; min-width:140px;">
           <label>End date</label>

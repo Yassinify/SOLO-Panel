@@ -19,6 +19,10 @@ function formatBytes(bytes) {
 const BYTES_PER_GB = 1024 ** 3;
 const BYTES_PER_MB = 1024 ** 2;
 
+// Shared by subscriptionLimits.js's countdown math and server.js's
+// end-date picker conversions.
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 // A byte count as GB (>=1GB) or MB (<1GB) only -- unlike formatBytes()
 // this never drops to KB/B, used for usage-limit displays/warnings
 // where only GB/MB are meaningful units.
@@ -53,6 +57,13 @@ function generatePath() {
 // (client-side) values -- Railway's edge does the real TLS handshake.
 const ALPN_VARIANTS = ['http/1.1', 'h2'];
 const FINGERPRINTS = ['chrome', 'firefox', 'safari', 'ios', 'android', 'randomized'];
+
+// Protocol/transport combos this panel generates. Shared by
+// inbounds.js's CORE_COMBOS (what actually gets seeded) and
+// modes.js's MODE_DIMENSIONS (what the admin can toggle) -- must stay
+// a single source of truth since both lists have to match exactly.
+const PROTOCOLS = ['vless', 'trojan'];
+const TRANSPORTS = ['ws', 'xhttp', 'httpupgrade'];
 
 // Cached result of the once-at-boot IP geolocation lookup below.
 // null until the lookup succeeds; stays null forever if it fails, in
@@ -149,8 +160,12 @@ module.exports = {
   formatUsagePair,
   QR_ICON_SVG,
   generatePath,
+  BYTES_PER_GB,
+  MS_PER_DAY,
   ALPN_VARIANTS,
   FINGERPRINTS,
+  PROTOCOLS,
+  TRANSPORTS,
   regionFlag,
   regionName,
   currentRegion,
