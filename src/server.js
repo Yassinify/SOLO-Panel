@@ -17,6 +17,7 @@ const { internalPortForRow } = require('./cores/ports');
 const { attachProxy } = require('./xray/proxy');
 const statsPoller = require('./xray/statsPoller');
 const healthMonitor = require('./healthMonitor');
+const { maybeRestartOnSubscriptionFetch } = require('./subRestartLimiter');
 const { getAllHealth } = require('./health');
 // Today's date as YYYY-MM-DD (local server time), for the end-date
 // picker's `min` attribute -- can't pick a date before today.
@@ -117,6 +118,12 @@ app.get('/health', (req, res) => {
 // browser gets the HTML panel, a VPN client app gets the raw base64
 // link feed. `/sub/:subId/raw` below is an explicit-raw alias.
 function sendRawSubscription(req, res) {
+  // A client app refreshing its subscription is exactly the moment a
+  // stuck-protocol restart (see docs/problem.md) is most useful and
+  // least disruptive -- rate-limited internally so frequent client
+  // polling can't restart cores too often.
+  maybeRestartOnSubscriptionFetch();
+
   // Rows whose mode is currently disabled are left out entirely.
   const enabledRows = inbounds.listInbounds().filter((row) => isRowEnabled(row));
   const links = buildAllClientLinks(orderInbounds(enabledRows), externalHostFor(req), getEnabledAlpnValues(), getEnabledFingerprints());
