@@ -132,7 +132,7 @@ function sendRawSubscription(req, res) {
   // client app's server list shows days-left/usage-left directly.
   const usageSummary = getUsageSummary(inbounds.getTotalTrafficBytes());
   const usageInfoLink = buildUsageInfoLink(
-    `\ud83d\udcc5 ${usageSummary.unlimitedDays ? 'Unlimited' : `${usageSummary.daysLeft} Days`}  \ud83d\udcca ${usageSummary.unlimitedUsage ? 'Unlimited' : formatUsagePair(usageSummary.usageUsedBytes, usageSummary.usageTotalGB)}`
+    `\ud83d\udcc5 ${usageSummary.unlimitedDays ? 'Unlimited' : `${usageSummary.daysLeft} Days`}  \ud83d\udcca ${usageSummary.unlimitedUsage ? `${formatBytes(usageSummary.usageUsedBytes)} / Unlimited` : formatUsagePair(usageSummary.usageUsedBytes, usageSummary.usageTotalGB)}`
   );
 
   // Extra warning entries, only shown once the limit is actually close:
@@ -189,7 +189,7 @@ function sendSubscriptionPanel(req, res, subId) {
     totalCount: endpoints.length,
     systemStatus,
     daysLeftText: usageSummary.unlimitedDays ? 'Unlimited' : `${usageSummary.daysLeft} Days`,
-    usageLeftText: usageSummary.unlimitedUsage ? 'Unlimited' : formatUsagePair(usageSummary.usageUsedBytes, usageSummary.usageTotalGB),
+    usageLeftText: usageSummary.unlimitedUsage ? `${formatBytes(usageSummary.usageUsedBytes)} / Unlimited` : formatUsagePair(usageSummary.usageUsedBytes, usageSummary.usageTotalGB),
     qrIconSvg: QR_ICON_SVG,
   });
 }
@@ -310,7 +310,7 @@ app.get('/', requireAuth, (req, res) => {
     todayDate: todayDateString(),
     limitUsageGB: limits.usageGB === null ? '' : limits.usageGB,
     daysLeftText: usageSummary.unlimitedDays ? 'Unlimited' : `${usageSummary.daysLeft} Days`,
-    usageLeftText: usageSummary.unlimitedUsage ? 'Unlimited' : formatBytes(usageSummary.usageLeftBytes),
+    usageLeftText: usageSummary.unlimitedUsage ? `${formatBytes(usageSummary.usageUsedBytes)} / Unlimited` : formatBytes(usageSummary.usageLeftBytes),
     dataDirWarning,
   });
 });
