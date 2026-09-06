@@ -20,11 +20,15 @@ const BYTES_PER_GB = 1024 ** 3;
 const BYTES_PER_MB = 1024 ** 2;
 
 // Converts an admin-entered usage-limit GB value to bytes for
-// enforcement/display. GB->MB is decimal (1 GB = 1000 MB) so e.g.
-// 0.01 GB always converts to an exact 10 MB, matching what the admin
-// typed; MB->bytes stays binary (1024^2) for actual byte-level math.
+// enforcement/display. Pure binary (1 GB = 1024^3 bytes), matching
+// BYTES_PER_GB/formatBytes()/formatGbOrMb() elsewhere in this file --
+// client apps (Hiddify, v2rayN, etc.) display the raw byte total from
+// the Subscription-Userinfo header using this same binary definition,
+// so an admin-entered "80" GB has to convert with the same factor a
+// client will divide back out by, or the two disagree (previously a
+// decimal GB->MB step made 80 GB read back as ~78.1 GB in clients).
 function usageLimitGbToBytes(gb) {
-  return gb * 1000 * BYTES_PER_MB;
+  return gb * BYTES_PER_GB;
 }
 
 // Shared by subscriptionLimits.js's countdown math and server.js's
