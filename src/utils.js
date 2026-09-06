@@ -85,33 +85,98 @@ function flagEmojiFromIso2(iso2) {
   return [...iso2.toUpperCase()].map((c) => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)).join('');
 }
 
+// IP geolocation providers tried in order, each with its own
+// response shape normalized to { country, iso2 }. If one provider is
+// down or its request fails, the next one is tried; each provider
+// also gets its own retry (see fetchProviderWithRetry) before giving
+// up on it and moving on.
+const GEO_PROVIDERS = [
+  {
+    url: 'https://ipwho.is/',
+    parse: (data) => {
+      if (data.success === false || !data.country || !data.country_code) return null;
+      return { country: data.country, iso2: data.country_code.toLowerCase() };
+    },
+  },
+  {
+    url: 'https://ip-api.com/json/',
+    parse: (data) => {
+      if (data.status !== 'success' || !data.country || !data.countryCode) return null;
+      return { country: data.country, iso2: data.countryCode.toLowerCase() };
+    },
+  },
+  {
+    url: 'https://ipapi.co/json/',
+    parse: (data) => {
+      if (data.error || !data.country_name || !data.country_code) return null;
+      return { country: data.country_name, iso2: data.country_code.toLowerCase() };
+    },
+  },
+];
+
+// Retries per provider before falling through to the next one --
+// covers transient network blips without waiting on a fully dead
+// provider forever.
+const GEO_RETRIES_PER_PROVIDER = 2;
+const GEO_RETRY_DELAY_MS = 1000;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Single HTTPS GET + JSON parse, wrapped in a Promise. Resolves with
+// parsed JSON, or rejects on network error/timeout/bad JSON.
+function fetchJson(url) {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { timeout: 5000 }, (res) => {
+      let body = '';
+      res.on('data', (chunk) => { body += chunk; });
+      res.on('end', () => {
+        try {
+          resolve(JSON.parse(body));
+        } catch (err) {
+          reject(err);
+        }
+      });
+    });
+    req.on('timeout', () => req.destroy(new Error('timeout')));
+    req.on('error', reject);
+  });
+}
+
+// Tries one provider up to GEO_RETRIES_PER_PROVIDER+1 times (with a
+// short delay between attempts) before giving up on it.
+async function fetchProviderWithRetry(provider) {
+  for (let attempt = 0; attempt <= GEO_RETRIES_PER_PROVIDER; attempt++) {
+    try {
+      const data = await fetchJson(provider.url);
+      const result = provider.parse(data);
+      if (result) return result;
+      return null; // valid response, but no usable country -- don't retry, try next provider
+    } catch {
+      if (attempt < GEO_RETRIES_PER_PROVIDER) await sleep(GEO_RETRY_DELAY_MS);
+    }
+  }
+  return null;
+}
+
 // Looks up this server's own public IP's country once at boot (not
 // per-request, to avoid an external call + delay on every panel
 // view), so the dashboard/subscription panel's Location flag is
 // correct from the very first boot -- unlike RAILWAY_REPLICA_REGION,
 // which can lag behind on a freshly changed region until Railway
-// actually redeploys the container. Failure just leaves `ipRegion`
-// null, so currentRegion() silently falls back to the region-based
-// logic below.
-function detectRegionByIp() {
-  const req = https.get('https://ipwho.is/', { timeout: 5000 }, (res) => {
-    let body = '';
-    res.on('data', (chunk) => { body += chunk; });
-    res.on('end', () => {
-      try {
-        const data = JSON.parse(body);
-        if (data.success !== false && data.country && data.country_code) {
-          ipRegion = { flag: flagEmojiFromIso2(data.country_code), name: data.country, iso2: data.country_code.toLowerCase() };
-        }
-      } catch {
-        // Malformed response -- leave ipRegion null, fall back.
-      }
-    });
-  });
-  req.on('timeout', () => req.destroy());
-  req.on('error', () => {
-    // Network error / API unreachable -- leave ipRegion null, fall back.
-  });
+// actually redeploys the container. Tries each provider in
+// GEO_PROVIDERS in turn (with its own retries) until one succeeds;
+// if all of them fail, `ipRegion` stays null and currentRegion()
+// silently falls back to the region-based logic below.
+async function detectRegionByIp() {
+  for (const provider of GEO_PROVIDERS) {
+    const result = await fetchProviderWithRetry(provider);
+    if (result) {
+      ipRegion = { flag: flagEmojiFromIso2(result.iso2), name: result.country, iso2: result.iso2 };
+      return;
+    }
+  }
 }
 detectRegionByIp();
 
@@ -138,13 +203,6 @@ function regionFlag() {
   const region = process.env.RAILWAY_REPLICA_REGION || '';
   const match = REGION_FLAGS.find((r) => region.startsWith(r.prefix));
   return match ? match.flag : '';
-}
-
-// Human-readable location name for the current region, or a globe fallback.
-function regionName() {
-  const region = process.env.RAILWAY_REPLICA_REGION || '';
-  const match = REGION_FLAGS.find((r) => region.startsWith(r.prefix));
-  return match ? match.name : '\u{1F310}';
 }
 
 // Country this deployment is running in (name + iso2 for a flag
@@ -176,6 +234,5 @@ module.exports = {
   PROTOCOLS,
   TRANSPORTS,
   regionFlag,
-  regionName,
   currentRegion,
 };

@@ -51,7 +51,8 @@ function daysFromEndDate(endDateStr) {
 
 const { formatBytes, formatGbOrMb, formatUsagePair, QR_ICON_SVG, currentRegion, MS_PER_DAY } = require('./utils');
 const { MODE_DIMENSIONS, getModeState, setModeState, isRowEnabled, emptyDimensions, labelForMode, getEnabledAlpnValues, getEnabledFingerprints } = require('./modes');
-const { getLimits, setLimits, getUsageSummary } = require('./subscriptionLimits');
+const { getLimits, setLimits, getUsageSummary, buildUserinfoHeader } = require('./subscriptionLimits');
+const { getSimpleRemarks, setSimpleRemarks } = require('./advancedOptions');
 
 // The public host clients connect to. Uses whichever domain the
 // request actually came in on (Railway's or a custom PUBLIC_DOMAIN),
@@ -66,6 +67,18 @@ function externalHostFor(req) {
 // URL can serve both. Client apps don't send a Mozilla-style User-Agent.
 function isBrowserRequest(req) {
   return /Mozilla/i.test(req.get('user-agent') || '');
+}
+
+// Single source of truth for the dashboard/subscription-panel overall
+// status label, so the two pages can't disagree on the same health
+// data. 'unavailable' if nothing is reachable (this also naturally
+// covers totalCount === 0, since activeCount can never exceed
+// totalCount), 'degraded' if some but not all endpoints are reachable,
+// 'healthy' otherwise.
+function systemStatusFor(activeCount, totalCount) {
+  if (activeCount === 0) return 'unavailable';
+  if (activeCount < totalCount) return 'degraded';
+  return 'healthy';
 }
 
 seedAdminFromEnv();
@@ -126,13 +139,20 @@ function sendRawSubscription(req, res) {
 
   // Rows whose mode is currently disabled are left out entirely.
   const enabledRows = inbounds.listInbounds().filter((row) => isRowEnabled(row));
-  const links = buildAllClientLinks(orderInbounds(enabledRows), externalHostFor(req), getEnabledAlpnValues(), getEnabledFingerprints());
+  const links = buildAllClientLinks(orderInbounds(enabledRows), externalHostFor(req), getEnabledAlpnValues(), getEnabledFingerprints(), getSimpleRemarks());
+
+  // Native time/traffic limits for clients that read it (Hiddify,
+  // Happ, NekoBox, v2rayN, etc. all show this in their own UI) --
+  // additive to the fake info/warning entries below, which cover
+  // clients that don't read response headers.
+  const { upload, download } = inbounds.getTrafficBreakdown();
+  res.set('Subscription-Userinfo', buildUserinfoHeader({ uploadBytes: upload, downloadBytes: download }));
 
   // Leading informational entry (non-functional, 127.0.0.1:443) so a
   // client app's server list shows days-left/usage-left directly.
   const usageSummary = getUsageSummary(inbounds.getTotalTrafficBytes());
   const usageInfoLink = buildUsageInfoLink(
-    `\ud83d\udcc5 ${usageSummary.unlimitedDays ? 'Unlimited' : `${usageSummary.daysLeft} Days`}  \ud83d\udcca ${usageSummary.unlimitedUsage ? `${formatBytes(usageSummary.usageUsedBytes)} / Unlimited` : formatUsagePair(usageSummary.usageUsedBytes, usageSummary.usageTotalGB)}`
+    `\ud83d\udcc5 ${usageSummary.unlimitedDays ? 'Unlimited' : `${usageSummary.daysLeft} Days`} | \ud83d\udcca ${usageSummary.unlimitedUsage ? `${formatBytes(usageSummary.usageUsedBytes)} / Unlimited` : formatUsagePair(usageSummary.usageUsedBytes, usageSummary.usageTotalGB)} | Version: ${APP_VERSION}`
   );
 
   // Extra warning entries, only shown once the limit is actually close:
@@ -173,9 +193,7 @@ function sendSubscriptionPanel(req, res, subId) {
     };
   });
   const activeCount = endpoints.filter((e) => e.health.status === 'healthy' || e.health.status === 'degraded').length;
-  // Overall status: unavailable if nothing is reachable, degraded if
-  // some but not all endpoints are, healthy otherwise.
-  const systemStatus = activeCount === 0 ? 'unavailable' : activeCount < endpoints.length ? 'degraded' : 'healthy';
+  const systemStatus = systemStatusFor(activeCount, endpoints.length);
 
   const usageSummary = getUsageSummary(inbounds.getTotalTrafficBytes());
 
@@ -281,7 +299,7 @@ app.get('/', requireAuth, (req, res) => {
   const enabledRows = rows.filter((r) => r.enabled);
   const activeCount = enabledRows.filter((r) => r.health.status === 'healthy' || r.health.status === 'degraded').length;
   const totalCount = enabledRows.length;
-  const systemStatus = totalCount === 0 ? 'unavailable' : activeCount < totalCount ? 'degraded' : 'healthy';
+  const systemStatus = systemStatusFor(activeCount, totalCount);
 
   const limits = getLimits();
   const usageSummary = getUsageSummary(inbounds.getTotalTrafficBytes());
@@ -309,6 +327,7 @@ app.get('/', requireAuth, (req, res) => {
     limitEndDate: endDateStringFromDaysLeft(usageSummary.daysLeft),
     todayDate: todayDateString(),
     limitUsageGB: limits.usageGB === null ? '' : limits.usageGB,
+    simpleRemarks: getSimpleRemarks(),
     daysLeftText: usageSummary.unlimitedDays ? 'Unlimited' : `${usageSummary.daysLeft} Days`,
     usageLeftText: usageSummary.unlimitedUsage ? `${formatBytes(usageSummary.usageUsedBytes)} / Unlimited` : formatBytes(usageSummary.usageLeftBytes),
     dataDirWarning,
@@ -340,11 +359,20 @@ app.post('/settings/advanced', requireAuth, requireCsrf, async (req, res) => {
 
   setModeState(newState);
   setLimits({ days: daysFromEndDate(req.body.end_date), usageGB: req.body.usage_gb });
+  setSimpleRemarks(req.body.simple_remarks === 'on');
 
   if (modesChanged) {
     await inbounds.reloadCores(); // only restart cores when a mode actually changed
   }
 
+  res.redirect('/');
+});
+
+// Zeroes out the tracked usage total (up_bytes/down_bytes across every
+// inbound) -- the dashboard's Usage limit (GB) reset icon. Leaves the
+// admin's usage-limit-GB setting and the days-left countdown untouched.
+app.post('/settings/usage/reset', requireAuth, requireCsrf, (req, res) => {
+  inbounds.resetUsage();
   res.redirect('/');
 });
 

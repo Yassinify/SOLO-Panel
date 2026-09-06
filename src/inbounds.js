@@ -38,6 +38,14 @@ function getTotalTrafficBytes() {
   return row.total;
 }
 
+// Upload/download bytes summed separately across every inbound.
+// getTotalTrafficBytes() above combines both directions into one
+// number for the days/usage-left math; the Subscription-Userinfo
+// response header (server.js) needs them apart.
+function getTrafficBreakdown() {
+  return db.prepare('SELECT COALESCE(SUM(up_bytes), 0) AS upload, COALESCE(SUM(down_bytes), 0) AS download FROM inbounds').get();
+}
+
 // Delete `inbounds` rows whose `core` isn't currently registered
 // (leftovers from a removed core). Safe to run every boot.
 function pruneOrphanedCoreRows() {
@@ -48,47 +56,50 @@ function pruneOrphanedCoreRows() {
 }
 
 // Idempotently seed one row per (core x protocol x transport) combo.
-// Credentials are shared per protocol. No-op once all rows exist.
+// Credentials are shared per protocol. Only inserts combos that are
+// actually missing -- checked individually, not just by comparing
+// counts, so a partial seed (or a future PROTOCOLS/TRANSPORTS change)
+// tops up just the missing rows instead of duplicating existing ones.
 function ensureGeneratedInbounds() {
-  const expectedCount = Object.values(CORE_COMBOS)
-    .reduce((sum, combo) => sum + combo.protocols.length * combo.transports.length, 0);
-  const existingCount = db.prepare('SELECT COUNT(*) AS n FROM inbounds').get().n;
+  const existingRows = db.prepare('SELECT core, protocol, transport, client_uuid, trojan_password FROM inbounds').all();
+  const existingCombos = new Set(existingRows.map((r) => `${r.core}:${r.protocol}:${r.transport}`));
 
-  if (existingCount < expectedCount) {
-    const credentialsByProtocol = {
-      vless: { client_uuid: crypto.randomUUID() },
-      trojan: { trojan_password: crypto.randomBytes(12).toString('hex') },
-    };
+  // Reuse an existing row's credentials for its protocol (any
+  // transport) so a partial top-up shares the same client identity as
+  // that protocol's other rows, instead of minting a new one.
+  const credentialsByProtocol = {};
+  for (const row of existingRows) {
+    if (!credentialsByProtocol[row.protocol]) {
+      credentialsByProtocol[row.protocol] = { client_uuid: row.client_uuid, trojan_password: row.trojan_password };
+    }
+  }
 
-    const insert = db.prepare(
-      `INSERT INTO inbounds (
-        core, protocol, transport, path, client_uuid, trojan_password,
-        ss_method, ss_password, subscription_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    );
+  const insert = db.prepare(
+    `INSERT INTO inbounds (
+      core, protocol, transport, path, client_uuid, trojan_password,
+      subscription_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)`
+  );
 
-    const insertAll = db.transaction(() => {
-      for (const [core, combo] of Object.entries(CORE_COMBOS)) {
-        for (const protocol of combo.protocols) {
-          const creds = credentialsByProtocol[protocol];
-          for (const transport of combo.transports) {
-            insert.run(
-              core,
-              protocol,
-              transport,
-              generatePath(),
-              creds.client_uuid || null,
-              creds.trojan_password || null,
-              creds.ss_method || null,
-              creds.ss_password || null,
-              crypto.randomBytes(16).toString('hex')
-            );
-          }
+  const insertAll = db.transaction(() => {
+    for (const [core, combo] of Object.entries(CORE_COMBOS)) {
+      for (const protocol of combo.protocols) {
+        if (!credentialsByProtocol[protocol]) {
+          credentialsByProtocol[protocol] = protocol === 'vless'
+            ? { client_uuid: crypto.randomUUID(), trojan_password: null }
+            : { client_uuid: null, trojan_password: crypto.randomBytes(12).toString('hex') };
+        }
+        const creds = credentialsByProtocol[protocol];
+        for (const transport of combo.transports) {
+          const key = `${core}:${protocol}:${transport}`;
+          if (existingCombos.has(key)) continue; // already seeded -- never duplicate
+          insert.run(core, protocol, transport, generatePath(), creds.client_uuid, creds.trojan_password, crypto.randomBytes(16).toString('hex'));
+          existingCombos.add(key); // guard against dupes within this same run too
         }
       }
-    });
-    insertAll();
-  }
+    }
+  });
+  insertAll();
 
   // REALITY and raw were removed entirely -- one-time cleanup of any
   // leftover rows from before those removals.
@@ -111,6 +122,14 @@ function addClientTraffic(inboundId, uplinkDelta, downlinkDelta) {
   db.prepare(
     'UPDATE inbounds SET up_bytes = up_bytes + ?, down_bytes = down_bytes + ? WHERE id = ?'
   ).run(uplinkDelta, downlinkDelta, inboundId);
+}
+
+// Zero out every inbound's traffic counters -- admin-triggered "reset
+// usage" action (dashboard's Usage limit icon). Only the running
+// totals are cleared; the admin's usage-limit-GB setting and the
+// days-left countdown (subscriptionLimits.js) are untouched.
+function resetUsage() {
+  db.prepare('UPDATE inbounds SET up_bytes = 0, down_bytes = 0').run();
 }
 
 // Rebuild one core's config from current DB state and (re)start it.
@@ -140,10 +159,12 @@ module.exports = {
   listInbounds,
   getInbound,
   getTotalTrafficBytes,
+  getTrafficBreakdown,
   pruneOrphanedCoreRows,
   ensureGeneratedInbounds,
   getOrCreateGlobalSubscriptionId,
   addClientTraffic,
+  resetUsage,
   reloadCore,
   reloadCores,
 };

@@ -7,12 +7,20 @@
 
 const INTERNAL_PORT_BASE = 10000;
 
-// Fixed internal loopback port for Xray's Stats API, below
-// INTERNAL_PORT_BASE so it never collides with a per-inbound port.
+// Fixed internal loopback port for Xray's Stats API. Sits inside the
+// same range per-inbound ports come from (INTERNAL_PORT_BASE + id) --
+// internalPortForInbound() below guards against a per-inbound port
+// ever landing on this exact value.
 const STATS_API_PORT = 10085;
 
 function internalPortForInbound(inboundId) {
-  return INTERNAL_PORT_BASE + inboundId;
+  const port = INTERNAL_PORT_BASE + inboundId;
+  // Reserve STATS_API_PORT exclusively for the Stats API: once the
+  // plain formula would reach or pass it, shift every id from there
+  // onward up by one port. Deterministic and monotonic per id, so no
+  // two ids ever land on the same port -- this can never collide
+  // again no matter how high ids grow (AUTOINCREMENT, never reused).
+  return port >= STATS_API_PORT ? port + 1 : port;
 }
 
 function statsTagForClient(inboundId) {

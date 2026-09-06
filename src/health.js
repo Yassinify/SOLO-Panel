@@ -84,4 +84,16 @@ function getAllHealth() {
   return result;
 }
 
-module.exports = { recordSuccess, recordFailure, getHealth, getAllHealth, UNAVAILABLE_AFTER_FAILURES };
+// Drop entries for inbound ids that no longer exist, so this Map
+// doesn't grow forever as inbounds get removed (ids are AUTOINCREMENT
+// and never reused). Called once per healthMonitor.js poll cycle with
+// the current set of inbound ids -- a cheap Set diff, negligible cost
+// at this app's scale (a handful of rows).
+function pruneMissingIds(validIds) {
+  const validSet = new Set(validIds);
+  for (const id of state.keys()) {
+    if (!validSet.has(id)) state.delete(id);
+  }
+}
+
+module.exports = { recordSuccess, recordFailure, getHealth, getAllHealth, pruneMissingIds, UNAVAILABLE_AFTER_FAILURES };

@@ -790,28 +790,17 @@ input[type="number"] {
   width: 100%;
   max-width: 320px;
   text-align: center;
-  transform: scale(0.96);
+  /* Same opacity+scale+translateY motion as the profile dropdown
+     (`.profile-dropdown`/`.profile-dropdown.open` above) -- every
+     popup in the panel opens with this one shared animation. */
   opacity: 0;
-  transition:
-    transform 0.18s ease,
-    opacity 0.18s ease;
-}
-.modal-backdrop.open .modal-box {
-  transform: scale(1);
-  opacity: 1;
-}
-
-/* QR code modal opens/closes with the same motion as the profile
-   dropdown (`.profile-dropdown`/`.profile-dropdown.open` above) --
-   scoped to `#qr-modal` only so the confirm/password/calendar modals
-   keep their own `.modal-box` animation. */
-#qr-modal .modal-box {
   transform: scale(0.95) translateY(-4px);
   transition:
     opacity 0.12s ease,
     transform 0.12s ease;
 }
-#qr-modal.open .modal-box {
+.modal-backdrop.open .modal-box {
+  opacity: 1;
   transform: scale(1) translateY(0);
 }
 .modal-box h3 {
@@ -868,6 +857,74 @@ input[type="number"] {
 }
 .health-unknown {
   color: var(--text-muted);
+}
+
+/* Label + inline icon button, side by side (e.g. "Usage limit (GB)"
+   + its reset icon) -- same flex/space-between idea as .sub-header-row
+   above, reused here since a plain <label> is display:block. */
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Small borderless icon-only button sitting inline with a label
+   (e.g. the "reset usage" icon next to Usage limit (GB)) -- quieter
+   than .qr-icon-btn's bordered/filled look, since this sits next to
+   plain text rather than inside a .link-box. */
+.icon-btn-inline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  line-height: 0;
+  border-radius: var(--radius);
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    transform 0.1s ease;
+}
+.icon-btn-inline:hover,
+.icon-btn-inline:focus-visible {
+  color: var(--accent);
+  background: var(--border-soft);
+  outline: none;
+}
+.icon-btn-inline:active {
+  transform: scale(0.92);
+}
+.icon-btn-inline svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
+/* Danger confirm button (e.g. "Reset usage" modal's Yes) -- same
+   outlined-fills-on-hover treatment as .btn-apply, but in the danger
+   color family, so a destructive Yes reads as clearly different from
+   the plain .btn-tertiary Cancel/No sitting next to it. */
+.btn-danger {
+  background: transparent;
+  border: 2px solid var(--danger);
+  color: var(--danger);
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  padding: 9px 26px;
+}
+.btn-danger:hover {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #2a0a0c;
+}
+.btn-danger:active:not(:disabled) {
+  background: #c94850;
+  border-color: #c94850;
+  color: #2a0a0c;
 }
 
 /* Danger-bordered info card (persistent-storage warning, modes-save

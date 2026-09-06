@@ -7,7 +7,7 @@ const net = require('net');
 const inbounds = require('./inbounds');
 const { getCore } = require('./cores');
 const { internalPortForRow } = require('./cores/ports');
-const { recordSuccess, recordFailure } = require('./health');
+const { recordSuccess, recordFailure, pruneMissingIds } = require('./health');
 const { reportCoreHealth } = require('./recovery');
 const { getModeState, isRowEnabled } = require('./modes');
 
@@ -52,7 +52,9 @@ async function pollOnce() {
   // Skip rows whose mode is disabled (modes.js) -- their port was
   // never opened, so left at 'unknown' instead of probed.
   const modeState = getModeState();
-  for (const row of inbounds.listInbounds()) {
+  const rows = inbounds.listInbounds();
+  pruneMissingIds(rows.map((row) => row.id)); // drop health.js entries for deleted inbounds
+  for (const row of rows) {
     if (!isRowEnabled(row, modeState)) continue;
 
     const coreHealthy = await isCoreHealthy(row.core);

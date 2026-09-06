@@ -55,13 +55,26 @@ function getOrCreateCsrfToken(req) {
 }
 
 // Middleware: reject POSTs whose _csrf field doesn't match the session token.
+// Uses a timing-safe comparison so response time can't leak how many
+// characters of the token an attacker has guessed correctly.
 function requireCsrf(req, res, next) {
   const submitted = req.body && req.body._csrf;
   const expected = req.session && req.session.csrfToken;
-  if (!expected || submitted !== expected) {
+  if (!expected || !timingSafeEqualStrings(submitted, expected)) {
     return res.status(403).send('Invalid or missing CSRF token. Go back and try again.');
   }
   next();
+}
+
+// Constant-time string comparison (avoids leaking match length via
+// timing). Returns false immediately -- safely -- if either input
+// isn't a usable string or the lengths differ.
+function timingSafeEqualStrings(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
 }
 
 module.exports = {

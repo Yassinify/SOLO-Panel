@@ -1,0 +1,32 @@
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+<div class="modal-backdrop" id="qr-modal" onclick="if(event.target===this) closeQr()">
+  <div class="modal-box">
+    <div class="modal-qr" id="qr-canvas"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-tertiary" onclick="closeQr()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  function showQr(elementId) {
+    const text = document.getElementById(elementId).textContent;
+    const holder = document.getElementById('qr-canvas');
+    holder.innerHTML = '';
+    // Result isn't kept -- holder.innerHTML is cleared above instead
+    // of calling QRCode's own .clear()/.makeCode() on a stored instance.
+    new QRCode(holder, {
+      text: text,
+      width: 220,
+      height: 220,
+      colorDark: '#0a0f1a',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M,
+    });
+    document.getElementById('qr-modal').classList.add('open');
+  }
+  function closeQr() {
+    document.getElementById('qr-modal').classList.remove('open');
+  }
+</script>

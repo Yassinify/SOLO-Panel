@@ -72,4 +72,34 @@ function getUsageSummary(totalUsedBytes) {
   };
 }
 
-module.exports = { getLimits, setLimits, getUsageSummary };
+// Builds the value for the "Subscription-Userinfo" response header
+// that several client apps (Hiddify, Happ, NekoBox, v2rayN, etc.)
+// already know how to parse, to show time/traffic limits natively in
+// their own UI instead of a fake config entry in the link list (see
+// buildUsageInfoLink() in xray/links.js, which this doesn't replace --
+// kept for clients that don't read this header). Standard format:
+// "upload=<bytes>; download=<bytes>; total=<bytes>; expire=<unix
+// seconds>". A dimension that's unlimited has its field omitted
+// entirely -- never sent as total=0/expire=0, since those would read
+// as "no quota left"/"expired since 1970" to a parsing client, which
+// is the opposite of unlimited.
+function buildUserinfoHeader({ uploadBytes, downloadBytes }) {
+  const limits = getLimits();
+  const parts = [
+    `upload=${Math.round(uploadBytes) || 0}`,
+    `download=${Math.round(downloadBytes) || 0}`,
+  ];
+
+  if (limits.usageGB !== null) {
+    parts.push(`total=${Math.round(usageLimitGbToBytes(limits.usageGB))}`);
+  }
+  if (limits.days !== null) {
+    const startedAt = limits.setAt ? new Date(limits.setAt).getTime() : Date.now();
+    const expireEpochSeconds = Math.floor((startedAt + limits.days * MS_PER_DAY) / 1000);
+    parts.push(`expire=${expireEpochSeconds}`);
+  }
+
+  return parts.join('; ');
+}
+
+module.exports = { getLimits, setLimits, getUsageSummary, buildUserinfoHeader };
