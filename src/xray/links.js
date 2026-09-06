@@ -61,10 +61,35 @@ function buildTransportParams(inbound, alpn, fingerprint, host) {
   return params;
 }
 
+// Some (transport x ALPN x fingerprint) combinations never connect
+// in practice (confirmed by real client testing):
+//   - xhttp's browser fingerprints (chrome/firefox/safari/ios/android)
+//     conflict with plain http/1.1 ALPN;
+//   - xhttp's android fingerprint also conflicts with h2 ALPN;
+//   - ws's android fingerprint conflicts with h2 ALPN (trojan/ws/h2/
+//     android confirmed broken even though ws isn't xhttp).
+// So the broken combination is never generated as a link anywhere.
+function isBrokenCombo(transport, alpn, fingerprint) {
+  if (transport === 'xhttp') {
+    if (alpn === 'http/1.1' && ['chrome', 'firefox', 'safari', 'ios', 'android'].includes(fingerprint)) {
+      return true;
+    }
+    if (alpn === 'h2' && fingerprint === 'android') {
+      return true;
+    }
+  }
+  if (transport === 'ws' && alpn === 'h2' && fingerprint === 'android') {
+    return true;
+  }
+  return false;
+}
+
 // Build one share link for one (inbound row x ALPN x fingerprint)
-// combo. Returns null if externalHost is unknown.
+// combo. Returns null if externalHost is unknown or the combo is broken.
 function buildOneLink({ inbound, externalHost, alpn, fingerprint, remarkOverride }) {
   if (!externalHost) return null;
+
+  if (isBrokenCombo(inbound.transport, alpn, fingerprint)) return null;
 
   const remark = remarkOverride || remarkFor(inbound, alpn, fingerprint);
 
@@ -100,9 +125,9 @@ function buildLinksForInbound({ inbound, externalHost, alpnValues = ALPN_VARIANT
 // When `simpleRemarks` is true (advancedOptions.js's toggle), every link's
 // remark is replaced with a short "<protocol> - <number>" form instead of
 // the full descriptive one: the full ordered (inbound, alpn, fingerprint)
-// combo list is built first, per-protocol totals are counted to pick each
-// protocol's zero-pad width, then running numbers are assigned within that
-// same order.
+// combo list is built first (excluding broken combos), per-protocol totals
+// are counted to pick each protocol's zero-pad width, then running numbers
+// are assigned within that same order.
 function buildAllClientLinks(inboundRows, externalHost, alpnValues = ALPN_VARIANTS, fingerprints = FINGERPRINTS, simpleRemarks = false) {
   if (!simpleRemarks) {
     return inboundRows.flatMap((inbound) => buildLinksForInbound({ inbound, externalHost, alpnValues, fingerprints }));
@@ -112,6 +137,7 @@ function buildAllClientLinks(inboundRows, externalHost, alpnValues = ALPN_VARIAN
   for (const inbound of inboundRows) {
     for (const alpn of alpnValues) {
       for (const fingerprint of fingerprints) {
+        if (isBrokenCombo(inbound.transport, alpn, fingerprint)) continue;
         combos.push({ inbound, alpn, fingerprint });
       }
     }
