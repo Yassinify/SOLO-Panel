@@ -1,3 +1,5 @@
+**Languages:** English | [فارسی](README.fa.md)
+
 # SOLO Panel: Free Self-Hosted VPN Panel for Railway (Xray-core, VLESS, Trojan)
 
 **SOLO Panel** is an open-source, self-hosted **VPN / proxy panel** that
