@@ -10,7 +10,10 @@
 const inbounds = require('../inbounds');
 const { listCores } = require('../cores');
 
-const POLL_INTERVAL_MS = 10000;
+// Each poll spawns an `xray` CLI process (see stats.js), so keep this
+// infrequent. Xray accumulates counters between polls (-reset returns
+// the delta), so a longer interval loses no traffic.
+const POLL_INTERVAL_MS = 30000;
 
 let timer = null;
 

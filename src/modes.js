@@ -20,15 +20,14 @@ const MODE_DIMENSIONS = {
 };
 
 // Default enabled value(s) per dimension before the admin ever saves
-// a change. A value missing here defaults to disabled.
-const MODE_DEFAULTS = {
-  protocol: { vless: true },
-  transport: { xhttp: true },
-  alpn: { 'http/1.1': true },
-  // 'randomized' is the only fingerprint that works across every
-  // default ALPN variant -- 'chrome' fails on http/1.1.
-  fingerprint: { randomized: true },
-};
+// a change. Every value is enabled by default; a value missing here
+// would default to disabled.
+const MODE_DEFAULTS = Object.fromEntries(
+  Object.entries(MODE_DIMENSIONS).map(([dimension, values]) => [
+    dimension,
+    Object.fromEntries(values.map((value) => [value, true])),
+  ])
+);
 
 function configKey(dimension, value) {
   return `mode_${dimension}_${value}`;

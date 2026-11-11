@@ -54,6 +54,8 @@ const { MODE_DIMENSIONS, getModeState, setModeState, isRowEnabled, emptyDimensio
 const { getLimits, setLimits, getUsageSummary, buildUserinfoHeader } = require('./subscriptionLimits');
 const { getSimpleRemarks, setSimpleRemarks } = require('./advancedOptions');
 
+const SUBSCRIPTION_NAME = 'Solo-Panel';
+
 // The public host clients connect to. Uses whichever domain the
 // request actually came in on (Railway's or a custom PUBLIC_DOMAIN),
 // so generated links always match the domain that was visited. Falls
@@ -147,6 +149,10 @@ function sendRawSubscription(req, res) {
   // clients that don't read response headers.
   const { upload, download } = inbounds.getTrafficBreakdown();
   res.set('Subscription-Userinfo', buildUserinfoHeader({ uploadBytes: upload, downloadBytes: download }));
+
+  // Name shown for the subscription in clients that read this header
+  // (Hiddify, Happ, v2rayN, etc.), so it imports as "Solo-Panel".
+  res.set('Profile-Title', SUBSCRIPTION_NAME);
 
   // Leading informational entry (non-functional, 127.0.0.1:443) so a
   // client app's server list shows days-left/usage-left directly.

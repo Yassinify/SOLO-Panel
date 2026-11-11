@@ -2,8 +2,9 @@
 'use strict';
 
 const fs = require('fs');
+const net = require('net');
 const manager = require('../xray/manager');
-const { buildXrayConfig } = require('../xray/config');
+const { buildXrayConfig, STATS_API_PORT } = require('../xray/config');
 const { queryStats, toClientTraffic } = require('../xray/stats');
 
 const NAME = 'xray';
@@ -53,13 +54,28 @@ async function getStats() {
   }
 }
 
-// Health check: process alive + Stats API reachable.
+const STATS_PORT_TIMEOUT_MS = 2000;
+
+// Resolves if xray's Stats API port accepts a TCP connection. Used by
+// healthCheck() instead of queryStats(): that spawns an `xray` CLI
+// process (and with -reset also wipes the traffic counters), far too
+// costly to run on every health-monitor cycle.
+function checkStatsPort() {
+  return new Promise((resolve, reject) => {
+    const socket = net.connect({ host: '127.0.0.1', port: STATS_API_PORT, timeout: STATS_PORT_TIMEOUT_MS });
+    socket.once('connect', () => { socket.destroy(); resolve(); });
+    socket.once('timeout', () => { socket.destroy(); reject(new Error('stats API port timed out')); });
+    socket.once('error', (err) => { socket.destroy(); reject(err); });
+  });
+}
+
+// Health check: process alive + Stats API port accepting connections.
 async function healthCheck() {
   if (!manager.isRunning()) {
     return { healthy: false, reason: 'process not running' };
   }
   try {
-    await queryStats();
+    await checkStatsPort();
     return { healthy: true };
   } catch (err) {
     return { healthy: false, reason: err.message };

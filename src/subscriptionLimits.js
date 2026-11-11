@@ -79,27 +79,29 @@ function getUsageSummary(totalUsedBytes) {
 // buildUsageInfoLink() in xray/links.js, which this doesn't replace --
 // kept for clients that don't read this header). Standard format:
 // "upload=<bytes>; download=<bytes>; total=<bytes>; expire=<unix
-// seconds>". A dimension that's unlimited has its field omitted
-// entirely -- never sent as total=0/expire=0, since those would read
-// as "no quota left"/"expired since 1970" to a parsing client, which
-// is the opposite of unlimited.
+// seconds>". A dimension that's unlimited is sent explicitly as
+// total=0 / expire=0 -- the de-facto convention (Marzban, 3x-ui) that
+// clients read as "unlimited"; omitting the field made some clients
+// misread it.
 function buildUserinfoHeader({ uploadBytes, downloadBytes }) {
   const limits = getLimits();
-  const parts = [
-    `upload=${Math.round(uploadBytes) || 0}`,
-    `download=${Math.round(downloadBytes) || 0}`,
-  ];
+  let total = 0;
+  let expireEpochSeconds = 0;
 
   if (limits.usageGB !== null) {
-    parts.push(`total=${Math.round(usageLimitGbToBytes(limits.usageGB))}`);
+    total = Math.round(usageLimitGbToBytes(limits.usageGB));
   }
   if (limits.days !== null) {
     const startedAt = limits.setAt ? new Date(limits.setAt).getTime() : Date.now();
-    const expireEpochSeconds = Math.floor((startedAt + limits.days * MS_PER_DAY) / 1000);
-    parts.push(`expire=${expireEpochSeconds}`);
+    expireEpochSeconds = Math.floor((startedAt + limits.days * MS_PER_DAY) / 1000);
   }
 
-  return parts.join('; ');
+  return [
+    `upload=${Math.round(uploadBytes) || 0}`,
+    `download=${Math.round(downloadBytes) || 0}`,
+    `total=${total}`,
+    `expire=${expireEpochSeconds}`,
+  ].join('; ');
 }
 
 module.exports = { getLimits, setLimits, getUsageSummary, buildUserinfoHeader };
